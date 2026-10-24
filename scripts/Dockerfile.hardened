@@ -1,0 +1,26 @@
+# Dockerfile.hardened — tentýž účel, ale podle best practices.
+# Multi-stage, pinované verze, slim base, non-root, bez secretů, HEALTHCHECK.
+
+# --- build stage: sem patří kompilátory a dev závislosti ---
+FROM python:3.12-slim AS build
+WORKDIR /build
+COPY requirements.txt .
+# BuildKit secret mount: token je dostupný JEN při buildu, nezůstane ve vrstvě
+# RUN --mount=type=secret,id=pip_token  pip install ...
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# --- runtime stage: minimální, bez build nástrojů ---
+FROM python:3.12-slim
+# Neprivilegovaný uživatel
+RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin appuser
+COPY --from=build /install /usr/local
+COPY --chown=10001:10001 . /app
+WORKDIR /app
+
+USER 10001
+EXPOSE 5000
+HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import socket; socket.create_connection(('127.0.0.1',5000),2)" || exit 1
+CMD ["python", "app.py"]
+
+# Secrets se předávají až za běhu (soubor/ENV z orchestrátoru), NE do image.
+# Spouštět s:  --read-only --cap-drop=ALL --security-opt=no-new-privileges --memory=256m

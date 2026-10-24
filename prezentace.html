@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bezpečnost kontejnerizace</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --fg:#e6edf3; --muted:#9aa7b4;
+    --accent:#58a6ff; --red:#ff6b6b; --redbg:#2d1619; --green:#3fb950; --greenbg:#102417;
+    --yellow:#d9a441; --border:#30363d; --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden;
+  }
+  .deck{height:100vh;width:100vw;position:relative}
+  .slide{
+    position:absolute;inset:0;display:none;flex-direction:column;
+    padding:56px 72px 72px;overflow:auto;
+  }
+  .slide.active{display:flex;animation:fade .35s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  h1{font-size:52px;line-height:1.1;margin-bottom:18px;letter-spacing:-1px}
+  h2{font-size:34px;margin-bottom:22px;color:var(--fg);letter-spacing:-.5px}
+  h2 .tag{font-size:15px;vertical-align:middle;color:var(--accent);
+    border:1px solid var(--accent);border-radius:20px;padding:3px 12px;margin-left:12px;font-weight:600}
+  h3{font-size:20px;margin:18px 0 10px;color:var(--accent)}
+  p,li{font-size:19px;line-height:1.55;color:var(--fg)}
+  ul{margin-left:24px;margin-top:6px}
+  li{margin-bottom:9px}
+  .muted{color:var(--muted)}
+  .lead{font-size:23px;color:var(--muted);max-width:60ch}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:8px}
+  .cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:10px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px 22px}
+  .card.bad{border-color:#5c2a2f;background:var(--redbg)}
+  .card.good{border-color:#1f5c33;background:var(--greenbg)}
+  .card h3{margin-top:0}
+  .card.bad h3{color:var(--red)} .card.good h3{color:var(--green)}
+  code,pre{font-family:var(--mono)}
+  pre{background:#010409;border:1px solid var(--border);border-radius:10px;
+    padding:16px 18px;overflow:auto;font-size:15.5px;line-height:1.5;margin-top:10px}
+  pre .c{color:#7d8590} pre .o{color:var(--red)} pre .g{color:var(--green)} pre .k{color:var(--accent)}
+  code.inline{background:var(--panel2);padding:2px 7px;border-radius:6px;font-size:.92em;color:#ffd9a0}
+  table{border-collapse:collapse;width:100%;margin-top:10px;font-size:16px}
+  th,td{border:1px solid var(--border);padding:9px 12px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--accent);font-size:14px;text-transform:uppercase;letter-spacing:.5px}
+  tr:nth-child(even) td{background:var(--panel)}
+  .pill{display:inline-block;font-size:13px;font-weight:600;padding:3px 10px;border-radius:20px;margin-right:6px}
+  .pill.r{background:var(--redbg);color:var(--red);border:1px solid #5c2a2f}
+  .pill.y{background:#2a2410;color:var(--yellow);border:1px solid #5c4a1f}
+  .pill.g{background:var(--greenbg);color:var(--green);border:1px solid #1f5c33}
+  .center{align-items:center;justify-content:center;text-align:center}
+  .kicker{color:var(--accent);font-weight:700;letter-spacing:3px;text-transform:uppercase;font-size:15px;margin-bottom:18px}
+  .foot{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-between;
+    align-items:center;padding:12px 24px;font-size:13px;color:var(--muted);
+    background:linear-gradient(transparent,var(--bg) 40%)}
+  .bar{position:fixed;top:0;left:0;height:3px;background:var(--accent);transition:width .35s;z-index:10}
+  .nav{display:flex;gap:8px}
+  .nav button{background:var(--panel2);color:var(--fg);border:1px solid var(--border);
+    border-radius:7px;padding:5px 12px;cursor:pointer;font-size:14px}
+  .nav button:hover{border-color:var(--accent)}
+  .big{font-size:26px;line-height:1.5}
+  .flow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:17px}
+  .flow .step{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 16px}
+  .flow .arr{color:var(--accent);font-size:22px}
+  .hint{font-size:14px;color:var(--muted);margin-top:14px}
+  .two-line{font-size:17px}
+  .warnbox{border-left:4px solid var(--yellow);background:#1f1b0e;padding:12px 18px;border-radius:0 8px 8px 0;margin-top:14px;font-size:17px}
+  .caps{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .caps code{font-family:var(--mono);font-size:13px;background:var(--panel2);border:1px solid var(--border);padding:3px 8px;border-radius:6px;color:#ffd9a0}
+  .caps code.danger{color:var(--red);border-color:#5c2a2f;background:var(--redbg)}
+  .caps code.safe{color:var(--green);border-color:#1f5c33;background:var(--greenbg)}
+  .caps code.off{color:var(--muted);text-decoration:line-through;opacity:.6}
+  .capdefs{display:grid;grid-template-columns:1fr 1fr;gap:5px 28px;margin-top:10px;font-size:14px}
+  .capdefs div{display:flex;gap:8px;align-items:baseline;line-height:1.3}
+  .capdefs code{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px solid var(--border);padding:2px 6px;border-radius:5px;color:#ffd9a0;white-space:nowrap}
+  .capdefs span{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<div class="deck" id="deck">
+
+  <!-- 1 -->
+  <section class="slide active center">
+    <div class="kicker">Zadání č. 6 A · Virtualizace</div>
+    <h1>Bezpečnost kontejnerizace</h1>
+    <p class="lead">Od chybné konfigurace k úniku dat — a zpět k principu nejmenších oprávnění.</p>
+    <p class="muted" style="margin-top:28px">Praktická demonstrace · root vs. privileged vs. hardened · Trivy &amp; Docker Scout</p>
+    <p class="hint">Ovládání: → / mezerník vpřed · ← zpět · F celá obrazovka</p>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <h2>Kontejner není virtuální stroj</h2>
+    <p class="lead">Všechny kontejnery sdílejí <b>jedno jádro hostitele</b>. Izolace není hardwarová — drží ji jen jaderné mechanismy.</p>
+    <div class="cols" style="margin-top:22px">
+      <div class="card">
+        <h3>Co drží izolaci</h3>
+        <ul>
+          <li><b>namespaces</b> — co kontejner <i>vidí</i> (pid, net, mnt…)</li>
+          <li><b>cgroups</b> — kolik zdrojů <i>smí</i></li>
+          <li><b>capabilities</b> — co smí <i>root uvnitř</i></li>
+          <li><b>seccomp / AppArmor</b> — filtr syscallů</li>
+        </ul>
+      </div>
+      <div class="card bad">
+        <h3>Když to vypneme</h3>
+        <p><code class="inline">--privileged</code>, <code class="inline">--cap-add</code>, bind-mount <code class="inline">/</code>, <code class="inline">docker.sock</code>…</p>
+        <p style="margin-top:12px;font-size:21px"><b>„root v kontejneru“ → „root na hostiteli“.</b></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <h2>Tři scénáře, které porovnáme</h2>
+    <div class="cols3">
+      <div class="card bad">
+        <span class="pill r">NEBEZPEČNÉ</span>
+        <h3>Privileged</h3>
+        <p>UID 0, <code class="inline">--privileged</code>, přístup ke všem <code class="inline">/dev</code>, žádné limity.</p>
+      </div>
+      <div class="card">
+        <span class="pill y">VÝCHOZÍ</span>
+        <h3>Root (default)</h3>
+        <p>Běží jako root, ~14 capabilities, zapisovatelný FS. „Funguje“, ale děravé.</p>
+      </div>
+      <div class="card good">
+        <span class="pill g">HARDENED</span>
+        <h3>Least privilege</h3>
+        <p>Non-root, <code class="inline">cap-drop=ALL</code>, read-only, limity, izolovaná síť.</p>
+      </div>
+    </div>
+    <p class="hint">Cíl: ukázat dopad (čtení <code class="inline">/etc/shadow</code>) a pak ho zavřít.</p>
+  </section>
+
+  <!-- 3b -->
+  <section class="slide">
+    <h2>Capabilities napříč scénáři <span class="tag">least privilege</span></h2>
+    <div class="card" style="padding:16px 20px">
+      <h3 style="margin-top:0">🟡 Root (default) — 14 zapnutých capabilities</h3>
+      <div class="capdefs">
+        <div><code>CHOWN</code><span>měnit vlastníka souborů</span></div>
+        <div><code>DAC_OVERRIDE</code><span>obejít kontrolu práv r/w/x</span></div>
+        <div><code>FOWNER</code><span>obejít kontroly vlastnictví (chmod…)</span></div>
+        <div><code>FSETID</code><span>zachovat setuid/setgid bit</span></div>
+        <div><code>KILL</code><span>poslat signál libovolnému procesu</span></div>
+        <div><code>SETGID</code><span>měnit GID / skupiny procesu</span></div>
+        <div><code>SETUID</code><span>měnit UID procesu (su, drop práv)</span></div>
+        <div><code>SETPCAP</code><span>přesouvat capabilities mezi sadami</span></div>
+        <div><code>SETFCAP</code><span>nastavit capabilities na souboru</span></div>
+        <div><code>NET_BIND_SERVICE</code><span>bindnout port &lt; 1024</span></div>
+        <div><code>NET_RAW</code><span>raw sockety (ping, odposlech)</span></div>
+        <div><code>SYS_CHROOT</code><span>volat chroot()</span></div>
+        <div><code>MKNOD</code><span>vytvářet device soubory (mknod)</span></div>
+        <div><code>AUDIT_WRITE</code><span>zápis do audit logu jádra</span></div>
+      </div>
+      <p style="margin-top:12px;font-size:15px" class="muted">Chybí <code class="inline">CAP_SYS_ADMIN</code> → ani výchozí root sám disk hostitele nepřipojí.</p>
+    </div>
+    <div class="cols" style="margin-top:16px">
+      <div class="card bad">
+        <h3>🔴 Privileged — přidá VŠE (~40)</h3>
+        <div class="caps">
+          <code class="danger">SYS_ADMIN</code><code class="danger">SYS_MODULE</code><code class="danger">SYS_RAWIO</code>
+          <code class="danger">SYS_PTRACE</code><code class="danger">DAC_READ_SEARCH</code><code class="danger">NET_ADMIN</code>
+          <code class="danger">SYS_BOOT</code><code class="danger">SYS_TIME</code><code class="danger">MAC_ADMIN</code><code class="danger">…</code>
+        </div>
+        <p style="margin-top:10px;font-size:15px">+ všechna <code class="inline">/dev</code> zařízení + seccomp/AppArmor <b>vypnuté</b>.<br><code class="inline">SYS_ADMIN</code> = mount → <b>escape</b> (skript 02).</p>
+      </div>
+      <div class="card good">
+        <h3>🟢 Hardened — <code class="inline">drop=ALL</code></h3>
+        <div class="caps">
+          <code class="safe">NET_BIND_SERVICE</code><code class="off">všech 14 ostatních</code>
+        </div>
+        <p style="margin-top:10px;font-size:15px">Zahodit vše, vrátit jen nutné (port &lt;1024). Bez <code class="inline">SYS_ADMIN</code> → mount selže, <b>escape nefunguje</b> (skript 12).</p>
+      </div>
+    </div>
+    <p class="hint">Rozdíl 🟡→🔴 = ze 14 kontrolovaných oprávnění skok na ~40 + devices + vypnuté bezpečnostní profily.</p>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <h2>DEMO · Únik dat hostitele <span class="tag">/etc/shadow</span></h2>
+    <p class="lead">Tři cesty ke čtení hesel hostitele zevnitř kontejneru — od nejjednodušší.</p>
+    <div class="cols3" style="margin-top:14px">
+      <div class="card bad">
+        <h3>1 · Bind-mount /</h3>
+        <pre><span class="c"># žádný exploit</span>
+docker run --rm \
+ <span class="o">-v /:/host:ro</span> alpine \
+ head /host/etc/shadow</pre>
+      </div>
+      <div class="card bad">
+        <h3>2 · Privileged</h3>
+        <pre><span class="o">--privileged</span> → disky
+ hostitele v /dev
+mount /dev/sda1 /mnt
+cat /mnt/etc/shadow</pre>
+      </div>
+      <div class="card bad">
+        <h3>3 · docker.sock</h3>
+        <pre><span class="o">-v …/docker.sock</span>
+→ spustím nový
+  kontejner s -v /
+→ /etc/shadow</pre>
+      </div>
+    </div>
+    <div class="warnbox">Pointa: ve všech třech případech to <b>není chyba Dockeru</b>, ale chybná konfigurace operátora. Skripty <code class="inline">01–03</code>.</div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <h2>Starší CVE jako ilustrace řetězení</h2>
+    <p class="lead">„Appka v kontejneru má RCE → útočník je uvnitř jako root → díky staré vrstvě escapne na hostitele.“</p>
+    <div class="cols" style="margin-top:18px">
+      <div class="card">
+        <h3>CVE-2019-5736 — runc escape</h3>
+        <p>Přepsání binárky <code class="inline">runc</code> z kontejneru → spuštění kódu na hostiteli. Dnes záplatováno; ukázka principu „root uvnitř + stará runtime = escape“.</p>
+      </div>
+      <div class="card">
+        <h3>Shellshock — CVE-2014-6271</h3>
+        <p>Na starém image <code class="inline">bash:4.3</code> stačí jediná proměnná prostředí. Krásně demonstruje „stará vrstva = stará díra“, kterou <b>odhalí scanner</b>.</p>
+      </div>
+    </div>
+    <p class="hint">Volíme záměrně staré, dnes neaktuální zranitelnosti — jsou rychlé a bezpečné na ukázku v laboratoři.</p>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <h2>root vs. non-root</h2>
+    <div class="cols">
+      <div class="card bad">
+        <h3>Výchozí: UID 0</h3>
+        <pre>docker run alpine id
+<span class="o">uid=0(root) gid=0(root)</span></pre>
+        <p style="margin-top:10px">UID 0 uvnitř = UID 0 na hostiteli. RCE → root. Soubory ve volume patří rootovi hostitele.</p>
+      </div>
+      <div class="card good">
+        <h3>Non-root (USER 10001)</h3>
+        <pre>docker run <span class="g">--user 10001</span> alpine id
+<span class="g">uid=10001 gid=10001</span></pre>
+        <p style="margin-top:10px">Útočník je „nikdo“. Doplnit <code class="inline">--security-opt=no-new-privileges</code>.</p>
+      </div>
+    </div>
+    <div class="warnbox">V Dockerfile: řádek <code class="inline">USER 10001</code>. Skript <code class="inline">04</code>.</div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <h2>Linux capabilities</h2>
+    <p class="lead">Rozbijí všemocného roota na dílčí oprávnění. Docker dává defaultně ~14; appka obvykle nepotřebuje skoro žádnou.</p>
+    <div class="cols" style="margin-top:16px">
+      <div class="card bad">
+        <h3>Výchozí sada</h3>
+        <p>Obsahuje např. <code class="inline">CAP_NET_RAW</code>, <code class="inline">CAP_CHOWN</code>, <code class="inline">CAP_SETUID</code>… zbytečně široké.</p>
+      </div>
+      <div class="card good">
+        <h3>Least privilege</h3>
+        <pre><span class="g">--cap-drop=ALL</span> \
+<span class="g">--cap-add=NET_BIND_SERVICE</span></pre>
+        <p style="margin-top:10px">Zahodit vše, přidat jen nutné (port &lt;1024). Zmizí <code class="inline">CAP_SYS_ADMIN</code> → mizí mount/escape.</p>
+      </div>
+    </div>
+    <p class="hint">Skript <code class="inline">05</code>: <code class="inline">ping</code> funguje jen s <code class="inline">CAP_NET_RAW</code> — hmatatelný rozdíl.</p>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <h2>privileged mode</h2>
+    <div class="cols">
+      <div class="card bad">
+        <h3>Co <code class="inline">--privileged</code> dělá</h3>
+        <ul>
+          <li>Všechny capabilities</li>
+          <li>Přístup ke všem zařízením <code class="inline">/dev</code> hostitele</li>
+          <li>Vypnuté seccomp/AppArmor profily</li>
+          <li>= prakticky žádná izolace</li>
+        </ul>
+        <p style="margin-top:10px"><b>Nejčastější důvod?</b> „Nefungovalo to, tak jsme dali privileged.“</p>
+      </div>
+      <div class="card good">
+        <h3>Místo toho</h3>
+        <ul>
+          <li>Přidat <b>konkrétní</b> capability nebo device</li>
+          <li><code class="inline">--device=/dev/xyz</code> cíleně</li>
+          <li>Nechat default seccomp zapnutý</li>
+        </ul>
+        <pre><span class="g"># skoro nikdy:</span> --privileged
+<span class="g"># správně:</span> --cap-add=NET_ADMIN</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <h2>read-only filesystem</h2>
+    <div class="cols">
+      <div class="card bad">
+        <h3>Zapisovatelný rootfs</h3>
+        <p>Útočník si uloží nástroje, backdoor, zajistí persistenci.</p>
+        <pre>echo malware > /usr/local/bin/x
+<span class="o">zápis PROŠEL</span></pre>
+      </div>
+      <div class="card good">
+        <h3>Neměnný FS + tmpfs</h3>
+        <pre><span class="g">--read-only</span> \
+<span class="g">--tmpfs /tmp:rw,noexec,nosuid</span></pre>
+        <p style="margin-top:10px">Rootfs zamčený, zápis jen do <code class="inline">/tmp</code> v RAM. <code class="inline">noexec</code> brání spuštění nahraného souboru.</p>
+      </div>
+    </div>
+    <div class="warnbox">Skript <code class="inline">06</code>.</div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <h2>Secrets</h2>
+    <div class="cols3">
+      <div class="card bad">
+        <h3>❌ ENV proměnná</h3>
+        <p>Vidět v <code class="inline">docker inspect</code> i v logách CI.</p>
+      </div>
+      <div class="card bad">
+        <h3>❌ V image</h3>
+        <p>Zůstane v <b>historii vrstev</b> i po smazání. Odhalí <code class="inline">docker history</code> / Trivy.</p>
+      </div>
+      <div class="card good">
+        <h3>✓ Správně</h3>
+        <p>BuildKit <code class="inline">--secret</code> (jen při buildu), za běhu soubor v <code class="inline">/run/secrets</code>, vault.</p>
+      </div>
+    </div>
+    <pre style="margin-top:18px"><span class="c"># build-time secret, nezůstane ve vrstvě</span>
+RUN <span class="g">--mount=type=secret,id=token</span> npm ci
+$ DOCKER_BUILDKIT=1 docker build <span class="g">--secret id=token,src=./token</span> .</pre>
+    <p class="hint">Skript <code class="inline">09</code>.</p>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <h2>Volumes</h2>
+    <div class="cols">
+      <div class="card bad">
+        <h3>Nebezpečné bind-mounty</h3>
+        <ul>
+          <li><code class="inline">-v /:/host</code> → celý hostitel</li>
+          <li><code class="inline">-v /var/run/docker.sock</code> → root escape</li>
+          <li><code class="inline">-v /etc:/etc</code> → zápis do konfigurace hostitele</li>
+        </ul>
+      </div>
+      <div class="card good">
+        <h3>Bezpečně</h3>
+        <ul>
+          <li>Pojmenované volumes místo bind-mountů</li>
+          <li>Mountovat jen <b>nutnou podsložku</b></li>
+          <li>Vždy <code class="inline">:ro</code>, když stačí čtení</li>
+        </ul>
+        <pre><span class="g">-v app-data:/data:ro</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <h2>Síťová izolace</h2>
+    <div class="cols3">
+      <div class="card bad">
+        <h3>Default bridge</h3>
+        <p>Kontejnery na sebe vidí přes IP → laterální pohyb po kompromitaci.</p>
+      </div>
+      <div class="card good">
+        <h3>User-defined net</h3>
+        <p>Segmentace (frontend/backend/db), DNS podle jmen, DB nevystavená ven.</p>
+      </div>
+      <div class="card good">
+        <h3>--network none</h3>
+        <p>Kontejner bez sítě, když ji nepotřebuje. Jen loopback.</p>
+      </div>
+    </div>
+    <div class="warnbox"><b>Nikdy</b> <code class="inline">--network host</code> — ruší síťový namespace = plný přístup na porty hostitele. Skript <code class="inline">08</code>.</div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <h2>Omezení zdrojů (cgroups)</h2>
+    <p class="lead">Bez limitů jeden kontejner (fork bomba, memory leak) položí celý hostitel = DoS.</p>
+    <div class="cols3" style="margin-top:16px">
+      <div class="card"><h3>Paměť</h3><pre><span class="g">--memory=256m</span></pre><p>Nad limit → OOM jen v kontejneru.</p></div>
+      <div class="card"><h3>CPU</h3><pre><span class="g">--cpus=0.5</span></pre><p>Max 50 % jednoho jádra.</p></div>
+      <div class="card"><h3>Procesy</h3><pre><span class="g">--pids-limit=100</span></pre><p>Fork bomba narazí na strop.</p></div>
+    </div>
+    <p class="hint">Skript <code class="inline">07</code> bezpečně spustí fork bombu v pids-limitu.</p>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <h2>Nejčastější zranitelnosti ↔ nastavení Dockeru</h2>
+    <table>
+      <tr><th>Chyba / zranitelnost</th><th>Dopad</th><th>Nastavení, které pomáhá</th></tr>
+      <tr><td>Běh jako root (UID 0)</td><td>RCE = root</td><td><code class="inline">USER 10001</code>, <code class="inline">--user</code>, <code class="inline">no-new-privileges</code></td></tr>
+      <tr><td><code class="inline">--privileged</code></td><td>Escape na hostitele</td><td>Nepoužívat; cílené <code class="inline">--cap-add</code>/<code class="inline">--device</code></td></tr>
+      <tr><td>Nadbytečné capabilities</td><td>mount/escape</td><td><code class="inline">--cap-drop=ALL</code> + jen nutné</td></tr>
+      <tr><td>Bind-mount <code class="inline">/</code> / docker.sock</td><td>Čtení hesel, root</td><td>Pojmenované volumes, <code class="inline">:ro</code>, socket-proxy</td></tr>
+      <tr><td>Zapisovatelný FS</td><td>Persistence útočníka</td><td><code class="inline">--read-only</code> + <code class="inline">--tmpfs</code></td></tr>
+      <tr><td>Secrets v ENV/image</td><td>Únik klíčů</td><td>BuildKit <code class="inline">--secret</code>, vault</td></tr>
+      <tr><td>Zastaralé base image</td><td>Známé CVE</td><td>Slim/distroless, pinovat, rebuild + sken</td></tr>
+      <tr><td>Bez limitů zdrojů</td><td>DoS hostitele</td><td><code class="inline">--memory --cpus --pids-limit</code></td></tr>
+    </table>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <h2>Vulnerability scanning</h2>
+    <div class="cols">
+      <div class="card">
+        <h3>Trivy <span class="pill g" style="font-size:11px">offline / CI</span></h3>
+        <ul>
+          <li>Zdarma, bez přihlášení</li>
+          <li>OS balíčky + app závislosti + misconfig + secrets</li>
+        </ul>
+        <pre>trivy image python:2.7
+trivy image --severity HIGH,CRITICAL nginx:1.14</pre>
+      </div>
+      <div class="card">
+        <h3>Docker Scout <span class="pill y" style="font-size:11px">login</span></h3>
+        <ul>
+          <li>Integrováno v Docker CLI</li>
+          <li><b>Vyžaduje</b> <code class="inline">docker login</code> (účet Docker Hub)</li>
+          <li>Umí navrhnout lepší base image</li>
+        </ul>
+        <pre>docker login
+docker scout cves nginx:1.14
+docker scout <span class="k">recommendations</span> nginx:1.14</pre>
+      </div>
+    </div>
+    <p class="hint">Skripty <code class="inline">10</code> (Trivy) a <code class="inline">11</code> (Scout). Reporty do <code class="inline">scripts/out/</code>.</p>
+  </section>
+
+  <!-- 16 -->
+  <section class="slide">
+    <h2>Analýza image &amp; návrh zabezpečení</h2>
+    <table>
+      <tr><th>Image</th><th>Stav</th><th>Očekávané nálezy</th></tr>
+      <tr><td><code class="inline">python:2.7</code></td><td><span class="pill r">EOL</span></td><td>Stovky CVE → nahradit <code class="inline">python:3.12-slim</code></td></tr>
+      <tr><td><code class="inline">node:8</code></td><td><span class="pill r">staré</span></td><td>Mnoho CVE → LTS slim</td></tr>
+      <tr><td><code class="inline">nginx:1.14</code></td><td><span class="pill y">staré</span></td><td>vs. <code class="inline">nginx:stable-alpine</code> (řádově méně)</td></tr>
+      <tr><td><code class="inline">debian:bookworm-slim</code></td><td><span class="pill g">OK</span></td><td>Menší plocha útoku</td></tr>
+      <tr><td>distroless</td><td><span class="pill g">min</span></td><td>Bez shellu a balíčkovače</td></tr>
+    </table>
+    <h3>Doporučení z nálezů</h3>
+    <ul>
+      <li>EOL/staré image pryč → aktuální <b>slim/alpine/distroless</b></li>
+      <li><b>Pinovat</b> verze a pravidelně rebuildit (CVE přibývají denně)</li>
+      <li><b>Multi-stage build</b> → z finálního image ven s kompilátory a dev balíčky</li>
+      <li>Non-root, <code class="inline">HEALTHCHECK</code>, drop capabilities, secrets ven z image</li>
+    </ul>
+  </section>
+
+  <!-- 17 -->
+  <section class="slide">
+    <h2>Zlatý standard — vše pohromadě</h2>
+    <pre>docker run -d --name app \
+  <span class="g">--user 10001:10001</span> \                      <span class="c"># non-root</span>
+  <span class="g">--read-only --tmpfs /tmp:rw,noexec,nosuid</span> \  <span class="c"># neměnný FS</span>
+  <span class="g">--cap-drop=ALL --cap-add=NET_BIND_SERVICE</span> \  <span class="c"># least privilege</span>
+  <span class="g">--security-opt=no-new-privileges</span> \          <span class="c"># bez eskalace</span>
+  <span class="g">--memory=256m --cpus=0.5 --pids-limit=100</span> \  <span class="c"># anti-DoS</span>
+  <span class="g">--network app-net</span> \                        <span class="c"># izolovaná síť</span>
+  <span class="g">-v app-data:/data:rw</span> \                      <span class="c"># pojmenovaný volume</span>
+  myapp:<span class="k">pinned-1.2.3</span>                           <span class="c"># pinovaná verze</span></pre>
+    <div class="warnbox">Skript <code class="inline">12</code> to spustí a přes <code class="inline">docker inspect</code> ověří, že escape z kroku 02 už <b>nefunguje</b>.</div>
+  </section>
+
+  <!-- 18 -->
+  <section class="slide center">
+    <div class="kicker">Shrnutí</div>
+    <h1 style="font-size:40px">Izolace je volba, ne výchozí stav</h1>
+    <div class="cols" style="max-width:900px;margin-top:10px">
+      <div class="card bad"><h3>Nebezpečné</h3><p>root · <code class="inline">--privileged</code> · bind-mount <code class="inline">/</code> · docker.sock · bez limitů · EOL image</p></div>
+      <div class="card good"><h3>Hardened</h3><p>non-root · <code class="inline">cap-drop=ALL</code> · read-only · limity · izolovaná síť · sken + pinování</p></div>
+    </div>
+    <p class="big" style="margin-top:26px">Princip <b>nejmenších oprávnění</b> + <b>pravidelný sken</b> = drtivá většina rizik zmizí.</p>
+    <p class="hint">Děkuji za pozornost · skripty ve složce <code class="inline">scripts/</code></p>
+  </section>
+
+</div>
+
+<div class="foot">
+  <div>Bezpečnost kontejnerizace · Zadání 6 A</div>
+  <div class="nav">
+    <button onclick="go(-1)">← Zpět</button>
+    <span id="counter" style="min-width:64px;text-align:center;line-height:30px">1 / 18</span>
+    <button onclick="go(1)">Vpřed →</button>
+  </div>
+</div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  let i=0;
+  function render(){
+    slides.forEach((s,n)=>s.classList.toggle('active',n===i));
+    document.getElementById('bar').style.width=((i+1)/slides.length*100)+'%';
+    document.getElementById('counter').textContent=(i+1)+' / '+slides.length;
+  }
+  function go(d){i=Math.min(slides.length-1,Math.max(0,i+d));render()}
+  document.addEventListener('keydown',e=>{
+    if(['ArrowRight',' ','PageDown'].includes(e.key)){e.preventDefault();go(1)}
+    else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();go(-1)}
+    else if(e.key==='Home'){i=0;render()}
+    else if(e.key==='End'){i=slides.length-1;render()}
+    else if(e.key.toLowerCase()==='f'){
+      if(!document.fullscreenElement)document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+  });
+  render();
+</script>
+</body>
+</html>

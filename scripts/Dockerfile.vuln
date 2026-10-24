@@ -1,0 +1,18 @@
+# Dockerfile.vuln — ZÁMĚRNĚ ŠPATNĚ. Slouží jen k demonstraci a skenování.
+# Antipatterny: EOL base, běh jako root, secret v image, build nástroje ve finále.
+FROM python:2.7
+
+# Antipattern: secret zakopírovaný do image (zůstane v historii vrstev)
+ENV API_KEY=sk_live_tajny_klic_1234567890
+RUN echo "db_password=SuperTajne123" > /app_secret.conf
+
+# Antipattern: zbytečné build nástroje a plný base image
+RUN pip install flask==0.12 requests==2.6.0
+
+COPY . /app
+WORKDIR /app
+
+# Antipattern: žádný USER → běží jako root (UID 0)
+# Antipattern: žádný HEALTHCHECK
+EXPOSE 5000
+CMD ["python", "-c", "print('vulnerable demo app')"]

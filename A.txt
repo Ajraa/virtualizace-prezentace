@@ -1,0 +1,28 @@
+Zadání č. 6 A
+Student analyzuje bezpečnostní rizika kontejnerizace.
+
+Musí prakticky demonstrovat rozdíl mezi:
+
+root container
+privileged container
+
+a bezpečnějším nastavením.
+
+Řeší:
+
+root vs. non-root,
+Linux capabilities,
+privileged mode,
+read-only filesystem,
+secrets,
+volumes,
+network isolation,
+omezení zdrojů.
+Vulnerability scanning
+
+Student použije nástroj typu:
+
+Trivy,
+Docker Scout.
+
+Provede analýzu několika images a navrhne jejich zabezpečení.

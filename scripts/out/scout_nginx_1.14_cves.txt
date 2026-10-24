@@ -1,0 +1,5 @@
+    i New version 1.27.0 available (installed version is 1.14.0) at https://github.com/docker/scout-cli
+          i Failed to connect to Docker Engine. Please make sure Docker Engine is running to access local images.
+          ...Pulling
+    x Pull failed
+level=error msg="Status: failed to get image nginx:1.14: failed to pull image nginx:1.14: no child with platform windows/amd64 in index nginx:1.14, Code: 1"

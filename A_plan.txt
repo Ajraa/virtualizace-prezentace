@@ -1,0 +1,9 @@
+
+Část A: Bezpečnost kontejnerizace a vulnerability scanning
+Cílem je demonstrace principu nejmenších oprávnění (least privilege) v Dockeru a analýza zranitelností obrazů.
+Srovnávací scénáře kontejnerů:
+Insecure / Privileged: Běh pod UID 0 (root), příznak --privileged, plný přístup k /dev hostitele a neomezené systémové prostředky.
+
+Standardní Root vs. Non-root: Demonstrace mapování UID; přechod na neprivilegovaného uživatele (USER 10001).
+
+Hardenovaný kontejner: Explicitní osekání Linux Capabilities (--cap-drop=ALL a přidání pouze nezbytných jako NET_BIND_SERVICE), neměnný souborový systém (--read-only s dočasným tmpfs pro zápis), izolovaná uživatelská síť a nastavené cgroups limity pro paměť a CPU.

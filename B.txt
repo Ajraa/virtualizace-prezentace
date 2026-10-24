@@ -1,0 +1,28 @@
+Zadání č. 6 B
+
+Student vytvoří zabezpečený Kubernetes deployment.
+
+Musí řešit:
+
+RBAC,
+ServiceAccount,
+Secrets,
+NetworkPolicy,
+Pod Security,
+image security,
+resource limits.
+Praktický experiment
+
+Vytvořit:
+
+záměrně nezabezpečený deployment
+
+a následně:
+
+zabezpečenou variantu.
+
+Student demonstruje rozdíl v možnostech útočníka.
+
+Výstupem je bezpečnostní analýza:
+
+„Jaké riziko představuje nesprávná konfigurace Kubernetes?“
