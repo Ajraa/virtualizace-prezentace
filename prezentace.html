@@ -160,7 +160,7 @@
         <div><code>SETPCAP</code><span>přesouvat capabilities mezi sadami</span></div>
         <div><code>SETFCAP</code><span>nastavit capabilities na souboru</span></div>
         <div><code>NET_BIND_SERVICE</code><span>bindnout port &lt; 1024</span></div>
-        <div><code>NET_RAW</code><span>raw sockety (ping, odposlech)</span></div>
+        <div><code>NET_RAW</code><span>raw sockety (odposlech, spoofing)</span></div>
         <div><code>SYS_CHROOT</code><span>volat chroot()</span></div>
         <div><code>MKNOD</code><span>vytvářet device soubory (mknod)</span></div>
         <div><code>AUDIT_WRITE</code><span>zápis do audit logu jádra</span></div>
@@ -359,7 +359,7 @@ docker run -v /:/host alpine \
         <p style="margin-top:10px">Zahodit vše, přidat jen nutné (port &lt;1024). Zmizí <code class="inline">CAP_SYS_ADMIN</code> → mizí mount/escape.</p>
       </div>
     </div>
-    <p class="hint">Hmatatelný rozdíl: <code class="inline">ping</code> funguje jen s <code class="inline">CAP_NET_RAW</code>.</p>
+    <p class="hint">Hmatatelný rozdíl: <code class="inline">chown</code> (změna vlastníka) jde jen s <code class="inline">CAP_CHOWN</code> — jinak i root dostane „Operation not permitted".</p>
   </section>
 
   <!-- 11 · skript 06 -->
