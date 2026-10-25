@@ -9,22 +9,23 @@ say "Ukážeme, že cgroup limity to VIDITELNĚ zastaví — a hostitel zůstane
 pause
 
 echo
-say "1) PIDs limit — kolik procesů projde bez limitu vs. s limitem:"
-echo "   a) BEZ limitu → 100 procesů se spustí bez problému:"
-run docker run --rm alpine:3.19 sh -c 'for i in $(seq 1 100); do sleep 30 & done; echo "běžících procesů: $(ps | wc -l)"'
-echo
-echo "   b) S --pids-limit=50 → limit spoustu pokusů ODMÍTNE ('can't fork'):"
-# Počítáme fork-chyby na HOSTITELI (uvnitř vyčerpaného kontejneru by ps/wc už nešlo spustit).
-fails=$(docker run --rm --pids-limit=50 alpine:3.19 sh -c 'for i in $(seq 1 100); do sleep 30 & done' 2>&1 | grep -ci fork || true)
-echo "   → ze 100 pokusů o spuštění procesu limit odmítl: ${fails} (strop = 50)"
+say "1) PIDs limit — kolik procesů se povede spustit (bez stropu vs. se stropem):"
+echo "   Každý proces při startu ohlásí 'ok'; počítáme je na hostiteli."
+echo "   a) BEZ limitu → spustíme 80, projdou všechny:"
+ok_free=$(docker run --rm alpine:3.19 sh -c 'for i in $(seq 1 80); do (echo ok; sleep 10) & done; sleep 1' 2>/dev/null | grep -c ok || true)
+echo "   → spuštěno: ${ok_free} / 80"
+echo "   b) S --pids-limit=50 → limit část pokusů ODMÍTNE:"
+ok_lim=$(docker run --rm --pids-limit=50 alpine:3.19 sh -c 'for i in $(seq 1 80); do (echo ok; sleep 10) & done; sleep 1' 2>/dev/null | grep -c ok || true)
+echo "   → spuštěno jen: ${ok_lim} / 80 (strop pids = 50)"
 good "Fork bomba / únik procesů narazí na strop → hostitel se nezadusí."
 pause
 
 echo
 say "2) Memory limit — proces chce neomezenou paměť, OOM killer ho zabije:"
-echo "   (--memory=64m; 'tail /dev/zero' alokuje paměť, dokud nenarazí na strop)"
-run docker run --rm --memory=64m alpine:3.19 sh -c 'tail /dev/zero' \
-  && echo "doběhl (neočekávané)" \
+echo "   (--memory=64m --memory-swap=64m = tvrdý strop 64 MB BEZ swapu;"
+echo "    'tail /dev/zero' alokuje paměť, dokud nenarazí na strop)"
+run docker run --rm --memory=64m --memory-swap=64m alpine:3.19 sh -c 'tail /dev/zero' \
+  && echo "→ doběhl (neočekávané)" \
   || warn "↑ proces ZABIT OOM killerem (exit $?) při překročení 64 MB — hostitel nedotčen."
 pause
 
