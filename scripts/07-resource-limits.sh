@@ -9,11 +9,14 @@ say "Ukážeme, že cgroup limity to VIDITELNĚ zastaví — a hostitel zůstane
 pause
 
 echo
-say "1) PIDs limit — zkusíme spustit 100 procesů, limit nás zastaví na ~50:"
-echo "   (--pids-limit=50; jakmile dojdou PIDy, uvidíš reálné chyby 'can't fork')"
-echo "\$ docker run --rm --pids-limit=50 alpine sh -c 'spusť 100× sleep na pozadí'"
-docker run --rm --pids-limit=50 alpine:3.19 sh -c \
-  'for i in $(seq 1 100); do sleep 60 & done; echo "---"; echo "reálně běží procesů: $(ps -o pid= | wc -l) (strop = 50)"' 2>&1 | tail -n 6
+say "1) PIDs limit — kolik procesů projde bez limitu vs. s limitem:"
+echo "   a) BEZ limitu → 100 procesů se spustí bez problému:"
+run docker run --rm alpine:3.19 sh -c 'for i in $(seq 1 100); do sleep 30 & done; echo "běžících procesů: $(ps | wc -l)"'
+echo
+echo "   b) S --pids-limit=50 → limit spoustu pokusů ODMÍTNE ('can't fork'):"
+# Počítáme fork-chyby na HOSTITELI (uvnitř vyčerpaného kontejneru by ps/wc už nešlo spustit).
+fails=$(docker run --rm --pids-limit=50 alpine:3.19 sh -c 'for i in $(seq 1 100); do sleep 30 & done' 2>&1 | grep -ci fork || true)
+echo "   → ze 100 pokusů o spuštění procesu limit odmítl: ${fails} (strop = 50)"
 good "Fork bomba / únik procesů narazí na strop → hostitel se nezadusí."
 pause
 
