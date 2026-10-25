@@ -25,7 +25,11 @@ run docker run --rm --cap-drop=ALL alpine:3.19 ping -c1 127.0.0.1 \
 pause
 
 echo
-good "Least privilege: zahodit vše a přidat jen to nutné."
-echo "  Web server na portu <1024 potřebuje jen NET_BIND_SERVICE:"
-run docker run --rm --cap-drop=ALL --cap-add=NET_BIND_SERVICE alpine:3.19 sh -c 'echo "běží jen s NET_BIND_SERVICE"'
-good "Tím zmizí CAP_SYS_ADMIN i spol. → zásadně menší prostor pro escape."
+good "Least privilege: zahodit vše a přidat jen nutné (web server potřebuje jen NET_BIND_SERVICE)."
+echo "  1) Aktivní capabilities tohoto kontejneru — NET_RAW už tam NENÍ, jen NET_BIND_SERVICE:"
+run docker run --rm --cap-drop=ALL --cap-add=NET_BIND_SERVICE alpine:3.19 sh -c 'apk add --no-cache libcap >/dev/null 2>&1; capsh --print | grep -i "current:"'
+echo
+echo "  2) Ping (potřebuje NET_RAW) proto selže i s NET_BIND_SERVICE:"
+run docker run --rm --cap-drop=ALL --cap-add=NET_BIND_SERVICE alpine:3.19 ping -c1 127.0.0.1 \
+  || warn "↑ ping selhal: NET_BIND_SERVICE nestačí, chybí CAP_NET_RAW."
+good "Zmizel CAP_SYS_ADMIN, NET_RAW i spol. → zásadně menší prostor pro útok (i když je kontejner stále root)."
