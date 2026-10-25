@@ -392,7 +392,7 @@ docker run -v /:/host alpine \
       <div class="card"><h3>CPU</h3><pre><span class="g">--cpus=0.5</span></pre><p>Max 50 % jednoho jádra.</p></div>
       <div class="card"><h3>Procesy</h3><pre><span class="g">--pids-limit=100</span></pre><p>Fork bomba narazí na strop.</p></div>
     </div>
-    <p class="hint">Demo bezpečně spustí fork bombu — <code class="inline">--pids-limit</code> + <code class="inline">--cpus</code> ji udusí, hostitel nedotčen.</p>
+    <p class="hint">Demo ukáže měřitelně: 100 procesů narazí na pids-limit (<code class="inline">can't fork</code>), paměťový žrout zabije OOM killer (exit 137), stejný výpočet s <code class="inline">--cpus=0.2</code> trvá násobně déle.</p>
   </section>
 
   <!-- 13 · skript 08 -->
