@@ -441,23 +441,33 @@ docker network rm app-net</pre>
   <section class="slide">
     <h2>Secrets <span class="badge">skript 09</span></h2>
     <div class="scen">Scénář: <span class="pill y">Root (default)</span> → <span class="pill g">Hardened</span></div>
+    <p class="lead" style="font-size:18px;margin-bottom:12px">Každý zlozvyk uniká <b>jiným kanálem</b> — a „smazání" nepomůže:</p>
     <div class="cols3">
       <div class="card bad">
         <h3>❌ ENV proměnná</h3>
-        <p>Vidět v <code class="inline">docker inspect</code> i v logách CI.</p>
+        <p>Uniká přes <code class="inline">docker inspect</code> (.Config.Env), <code class="inline">/proc/&lt;pid&gt;/environ</code> a logy CI.</p>
       </div>
       <div class="card bad">
-        <h3>❌ V image</h3>
-        <p>Zůstane v <b>historii vrstev</b> i po smazání. Odhalí <code class="inline">docker history</code> / Trivy.</p>
+        <h3>❌ COPY/RUN v image</h3>
+        <p>V <code class="inline">inspect</code> <b>není</b> — zůstane ve <b>vrstvě</b> i po <code class="inline">rm</code>. Odhalí <code class="inline">docker history</code>, <code class="inline">docker save</code>, Trivy.</p>
       </div>
       <div class="card good">
         <h3>✓ Správně</h3>
-        <p>BuildKit <code class="inline">--secret</code> (jen při buildu), za běhu soubor v <code class="inline">/run/secrets</code>, vault.</p>
+        <p>BuildKit <code class="inline">--secret</code> (jen při buildu) + za běhu soubor v <code class="inline">/run/secrets</code>.</p>
       </div>
     </div>
-    <pre style="margin-top:18px"><span class="c"># build-time secret, nezůstane ve vrstvě</span>
+    <div class="cols" style="margin-top:14px">
+      <div class="card">
+        <h3 style="margin-top:0">Build-time secret (BuildKit)</h3>
+        <pre><span class="c"># nezůstane ve vrstvě image</span>
 RUN <span class="g">--mount=type=secret,id=token</span> npm ci
-$ DOCKER_BUILDKIT=1 docker build <span class="g">--secret id=token,src=./token</span> .</pre>
+$ docker build <span class="g">--secret id=token,src=./token</span> .</pre>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Runtime secret — <code class="inline">/run/secrets</code></h3>
+        <p style="font-size:16px">Adresář na <b>tmpfs</b> (v RAM). Orchestrátor (Swarm/K8s) vloží secret jako <b>soubor</b>, read-only, jen do autorizovaných kontejnerů. App ho čte ze souboru → <b>není v inspect, environ, logách ani image</b>; jde rotovat bez rebuildu.</p>
+      </div>
+    </div>
   </section>
 
   <!-- 15 · skript 10 -->

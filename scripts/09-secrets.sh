@@ -13,8 +13,22 @@ cleanup_container secret-demo
 pause
 
 echo
-bad "Anti-pattern #2: secret zakopírovaný v image zůstane v HISTORII vrstev i po smazání:"
-echo "  (Dockerfile s 'COPY secret.txt' + 'RM secret.txt' → stále v dřívější vrstvě; odhalí 'docker history' / trivy)"
+bad "Anti-pattern #2 NAŽIVO: secret zapečený v image zůstane v HISTORII vrstev i po 'smazání'."
+BUILD_DIR=$(mktemp -d)
+cat > "$BUILD_DIR/Dockerfile" <<'EOF'
+FROM alpine:3.19
+# "tajný" build krok a HNED úklid, aby to vypadalo bezpečně:
+RUN echo "db_password=SuperTajne123" > /app_secret.conf && rm -f /app_secret.conf
+EOF
+say "Postavíme image, kde soubor se secretem vytvoříme a hned 'rm' smažeme:"
+run docker build -q -t secret-leak-demo "$BUILD_DIR" >/dev/null
+echo
+say "Přesto ho najdeme v historii vrstev (docker history --no-trunc):"
+run docker history --no-trunc secret-leak-demo | grep -i "SuperTajne" || echo "(nenalezeno)"
+bad "Heslo je TRVALE v historii vrstev — 'rm' ho neodstranil. Odhalí ho i Trivy (skript 10)."
+echo "   (pozn.: 'docker inspect' by COPY/RUN soubor NEukázal — uniká právě přes vrstvy/history)"
+docker rmi -f secret-leak-demo >/dev/null 2>&1 || true
+rm -rf "$BUILD_DIR"
 pause
 
 echo
