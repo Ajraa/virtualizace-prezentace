@@ -39,7 +39,7 @@ bad "Root v privileged kontejneru = root na hostiteli. Kompletní kompromitace."
 pause
 
 echo
-good "Obrana: NIKDY --privileged. Když je potřeba jen konkrétní schopnost, přidej cílenou capability:"
-echo "  docker run --rm --cap-drop=ALL alpine:3.19 sh -c 'mount ... # selže'"
-run docker run --rm --cap-drop=ALL alpine:3.19 sh -c 'mkdir -p /m; mount /dev/sda1 /m 2>&1 || echo "mount zakázán — cap-drop=ALL funguje"'
-good "Bez CAP_SYS_ADMIN kontejner disk hostitele nepřipojí."
+good "Obrana: NIKDY --privileged. Stejný debugfs útok bez něj selže:"
+echo "  docker run --rm alpine:3.19 debugfs -R 'cat /etc/shadow' /dev/sda1"
+run docker run --rm alpine:3.19 sh -c 'apk add --no-cache e2fsprogs-extra >/dev/null 2>&1; debugfs -R "cat /etc/shadow" /dev/sda1 2>&1 | head -2; echo "→ /dev/sda1 v kontejneru BEZ --privileged vůbec není"'
+good "Bez --privileged chybí přístup k zařízením hostitele. Když appka potřebuje jedno konkrétní, přidej ho cíleně přes --device, ne plošně --privileged."
