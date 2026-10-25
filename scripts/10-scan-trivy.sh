@@ -11,8 +11,9 @@ say "Trivy sken jednoho image — uvidíš, jak nativní výstup (tabulka CVE) v
 echo "   Image: ${IMAGE}  (filtr HIGH,CRITICAL, ať se tabulka vejde na obrazovku)"
 docker pull -q "$IMAGE" >/dev/null 2>&1 || true
 echo
-# --skip-java-db-update: nestahovat Java index (nginx je OS image bez Javy; jinak občas 'java db update failed')
-run trivy image --severity HIGH,CRITICAL --skip-java-db-update "$IMAGE" || warn "sken selhal (síť / image nedostupný?)"
+# --pkg-types os: sken jen OS balíčků (nginx je OS image) → Trivy vůbec neřeší Java DB
+#   (vyhne se chybě 'java db update failed', funguje i na prvním běhu)
+run trivy image --severity HIGH,CRITICAL --pkg-types os "$IMAGE" || warn "sken selhal (síť / image nedostupný?)"
 echo
 good "Sloupce tabulky: balíček · CVE ID · závažnost · nainstalovaná verze · opravená verze · název."
 good "Nahoře je i souhrn 'Total: N (HIGH: X, CRITICAL: Y)' — u starého image jich jsou desítky."
@@ -22,4 +23,4 @@ echo "  • Přejít na nginx:stable-alpine (řádově méně CVE, menší ploch
 echo "  • Pinovat verze a pravidelně rebuildit (nové CVE přibývají denně)."
 echo "  • Opustit EOL image (python:2.7, node:8) → aktuální slim/distroless."
 echo
-say "Tip: zkus i jiný image, ať vidíš rozdíl, např.:  trivy image --severity HIGH,CRITICAL --skip-java-db-update nginx:stable-alpine"
+say "Tip: zkus i jiný image, ať vidíš rozdíl, např.:  trivy image --severity HIGH,CRITICAL --pkg-types os nginx:stable-alpine"
