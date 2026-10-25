@@ -14,11 +14,14 @@ run docker run --rm alpine:3.19 sh -c 'apk add --no-cache libcap >/dev/null 2>&1
 pause
 
 echo
-say "Praktický rozdíl — ping potřebuje CAP_NET_RAW:"
-echo "  default  → ping funguje"
-run docker run --rm alpine:3.19 sh -c 'ping -c1 127.0.0.1 >/dev/null 2>&1 && echo "ping OK (má CAP_NET_RAW)" || echo "ping selhal"'
-echo "  cap-drop=ALL → ping selže (nemá CAP_NET_RAW)"
-run docker run --rm --cap-drop=ALL alpine:3.19 sh -c 'ping -c1 127.0.0.1 >/dev/null 2>&1 && echo "ping OK" || echo "ping ZAKÁZÁN — žádné capabilities"'
+say "Praktický rozdíl — ping potřebuje CAP_NET_RAW (vytvoření raw socketu):"
+echo
+echo "  a) default → ping funguje (reálný výstup):"
+run docker run --rm alpine:3.19 ping -c1 127.0.0.1
+echo
+echo "  b) cap-drop=ALL → ping selže (reálná chyba z kontejneru):"
+run docker run --rm --cap-drop=ALL alpine:3.19 ping -c1 127.0.0.1 \
+  || warn "↑ ping selhal: bez CAP_NET_RAW nejde vytvořit raw socket (permission denied)."
 pause
 
 echo

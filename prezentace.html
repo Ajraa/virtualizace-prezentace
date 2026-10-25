@@ -293,6 +293,7 @@ debugfs -R "cat /etc/shadow" /dev/sda1</pre>
   <section class="slide">
     <h2>Únik #3 — Docker socket <span class="badge">skript 03</span></h2>
     <div class="scen">Scénář: <span class="pill y">Root (default)</span> + namountovaný socket → <span class="pill g">Hardened (obrana)</span></div>
+    <p class="lead" style="font-size:19px;margin-bottom:14px"><code class="inline">/var/run/docker.sock</code> = komunikační kanál (API) k Docker démonu. CLI <code class="inline">docker</code> jen posílá přes socket příkazy démonu, který běží jako <b>root</b> a skutečně vytváří kontejnery. Kdo dosáhne na socket, <b>ovládá root démon = root na hostiteli</b>.</p>
     <div class="cols">
       <div class="card bad">
         <h3>Útok — kdo má socket, má hostitele</h3>
@@ -334,6 +335,11 @@ docker run -v /:/host alpine \
       </div>
     </div>
     <div class="warnbox">V Dockerfile stačí jediný řádek: <code class="inline">USER 10001</code>.</div>
+    <div class="card bad" style="margin-top:14px;border-color:#5c4a1f;background:#1f1b0e">
+      <h3 style="margin-top:0;color:var(--yellow)">⚠ Ani non-root není absolutní — sdílené jádro</h3>
+      <p style="font-size:17px"><b>Dirty Pipe (CVE-2022-0847)</b> — chyba v Linux jádře (≥ 5.8): <b>neprivilegovaný</b> uživatel mohl přepsat i read-only soubory a <b>povýšit na root</b>. Protože kontejnery sdílejí jádro hostitele, zabírá i zevnitř kontejneru. Veřejné PoC, v katalogu CISA KEV.</p>
+      <p style="font-size:15px" class="muted">Proto non-root není konec, ale jedna vrstva: patchované jádro + cap-drop + seccomp ji zálohují (defense in depth).</p>
+    </div>
   </section>
 
   <!-- 10 · skript 05 -->
