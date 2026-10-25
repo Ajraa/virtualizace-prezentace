@@ -413,7 +413,28 @@ docker run -v /:/host alpine \
         <p>Kontejner bez sítě, když ji nepotřebuje. Jen loopback.</p>
       </div>
     </div>
-    <div class="warnbox"><b>Nikdy</b> <code class="inline">--network host</code> — ruší síťový namespace = plný přístup na porty hostitele.</div>
+    <div class="card" style="margin-top:16px;padding:16px 20px">
+      <h3 style="margin-top:0">User-defined síť — vytvoření a výhody</h3>
+      <div class="cols">
+        <div>
+          <pre><span class="c"># vytvoření a připojení</span>
+docker network create <span class="g">app-net</span>
+docker run <span class="g">--network app-net</span> myapp
+<span class="c"># přehled a smazání</span>
+docker network ls
+docker network rm app-net</pre>
+        </div>
+        <div>
+          <ul style="margin-top:0">
+            <li><b>Izolace:</b> kontejnery vidí jen na ty ve stejné síti — jiná síť je nedosažitelná (brání laterálnímu pohybu)</li>
+            <li><b>DNS podle jmen:</b> kontejnery se najdou podle názvu (<code class="inline">http://victim</code>), ne přes křehké IP</li>
+            <li><b>Segmentace:</b> frontend-net / backend-net / db-net odděleně → DB nikdy vystavená ven</li>
+            <li><b>Kontrola:</b> explicitní připojení (<code class="inline">--network</code>), ne sdílený default bridge, kde na sebe vidí všichni</li>
+          </ul>
+        </div>
+      </div>
+      <p style="margin:6px 0 0;font-size:15px" class="muted">Default bridge = plochá síť (všichni na všechny). <code class="inline">--network none</code> = žádná síť. <code class="inline">--network host</code> = <b>nikdy</b> (ruší izolaci).</p>
+    </div>
   </section>
 
   <!-- 14 · skript 09 -->

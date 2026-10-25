@@ -28,12 +28,12 @@ run docker run -d --name victim --network net-a nginx:stable-alpine >/dev/null
 sleep 2
 
 echo
-good "   a) Útočník ve STEJNÉ síti (net-a) → na oběť DOSÁHNE:"
+say "   a) STEJNÁ síť (net-a) → kontejnery spolu komunikují (legitimní, frontend↔backend):"
 run docker run --rm --network net-a alpine:3.19 sh -c \
   'wget -T3 -qO- http://victim 2>/dev/null | grep -o "<title>.*</title>" && echo "→ DOSAŽENO (stejná síť, DNS podle jména funguje)" || echo "→ nedosaženo"'
 
 echo
-bad "   b) Útočník v JINÉ síti (net-b) → na oběť NEDOSÁHNE:"
+good "   b) JINÁ síť (net-b) → na oběť NEDOSÁHNE = izolace, žádný laterální pohyb:"
 run docker run --rm --network net-b alpine:3.19 sh -c \
   'wget -T3 -qO- http://victim 2>&1 | head -1; echo "→ NEDOSAŽITELNÉ z net-b (jiná síť = izolováno)"'
 pause
