@@ -476,9 +476,9 @@ $ docker build <span class="g">--secret id=token,src=./token</span> .</pre>
     <div class="scen">Scénář: napříč scénáři · analýza image (nezávisí na runtime konfiguraci)</div>
     <div class="card" style="padding:16px 20px">
       <h3 style="margin-top:0">Trivy <span class="pill g" style="font-size:11px">offline / CI · zdarma</span></h3>
-      <pre>trivy image python:2.7
-trivy image --severity HIGH,CRITICAL nginx:1.14</pre>
-      <p class="muted" style="font-size:15px;margin-top:8px">OS balíčky + app závislosti + misconfig + secrets. Report do <code class="inline">scripts/out/</code>.</p>
+      <pre><span class="c"># skenujeme záměrně starý image nginx:1.14</span>
+trivy image <span class="g">--severity HIGH,CRITICAL</span> <span class="g">--pkg-types os</span> nginx:1.14</pre>
+      <p class="muted" style="font-size:15px;margin-top:8px"><code class="inline">--pkg-types os</code> = jen OS balíčky (vyhne se stahování Java DB). Trivy umí i app závislosti, misconfig a secrets.</p>
     </div>
     <table style="margin-top:14px">
       <tr><th>Image</th><th>Stav</th><th>Očekávané nálezy</th></tr>
@@ -494,28 +494,23 @@ trivy image --severity HIGH,CRITICAL nginx:1.14</pre>
   <section class="slide">
     <h2>Vulnerability scanning — Docker Scout <span class="badge">skript 11</span></h2>
     <div class="scen">Scénář: napříč scénáři · analýza image (nezávisí na runtime konfiguraci)</div>
-    <div class="cols">
-      <div class="card">
-        <h3>Docker Scout <span class="pill y" style="font-size:11px">login</span></h3>
-        <ul>
-          <li>Integrováno v Docker CLI</li>
-          <li><b>Vyžaduje</b> <code class="inline">docker login</code> (účet Docker Hub)</li>
-          <li>Umí navrhnout lepší base image</li>
-        </ul>
-        <pre>docker login
-docker scout cves nginx:1.14
-docker scout <span class="k">recommendations</span> nginx:1.14</pre>
-      </div>
-      <div class="card good">
-        <h3>Doporučení z nálezů</h3>
-        <ul>
-          <li>EOL/staré image pryč → aktuální <b>slim/alpine/distroless</b></li>
-          <li><b>Pinovat</b> verze a pravidelně rebuildit (CVE přibývají denně)</li>
-          <li><b>Multi-stage build</b> → z finálního image ven s kompilátory a dev balíčky</li>
-          <li>Non-root, <code class="inline">HEALTHCHECK</code>, drop capabilities, secrets ven z image</li>
-        </ul>
-      </div>
+    <div class="card" style="padding:16px 20px">
+      <h3 style="margin-top:0">Docker Scout <span class="pill y" style="font-size:11px">vyžaduje docker login</span></h3>
+      <pre><span class="c"># stejný image jako Trivy — srovnání nástrojů</span>
+docker login
+docker scout cves <span class="g">--only-severity critical,high --only-package-type os</span> nginx:1.14
+docker scout <span class="k">recommendations</span> nginx:1.14   <span class="c"># unikát: návrh lepšího base image</span></pre>
     </div>
+    <h3>Trivy vs. Docker Scout</h3>
+    <table>
+      <tr><th></th><th>Trivy (Aqua)</th><th>Docker Scout</th></tr>
+      <tr><td>Cena / účet</td><td>zdarma, <b>bez přihlášení</b></td><td>vyžaduje <code class="inline">docker login</code></td></tr>
+      <tr><td>Režim</td><td>offline / CI friendly</td><td>napojený na Docker / cloud</td></tr>
+      <tr><td>Záběr</td><td>OS + app závislosti + <b>misconfig + secrets</b> (i K8s/Terraform)</td><td>OS + app závislosti, SBOM, analýza vrstev</td></tr>
+      <tr><td>Unikátní feature</td><td>široký záběr napříč IaC a kódem</td><td><b><code class="inline">recommendations</code></b> — navrhne lepší base image / tag</td></tr>
+      <tr><td>Integrace</td><td>CLI, CI/CD, běží kdekoli</td><td>Docker Desktop / Hub</td></tr>
+    </table>
+    <p class="hint">Stejné OS CVE najdou oba (čtou ze stejných zdrojů). V praxi se často kombinují: Trivy brána v CI, Scout actionable doporučení.</p>
   </section>
 
   <!-- 17 · skript 12 -->

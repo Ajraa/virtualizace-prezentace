@@ -16,7 +16,8 @@ docker pull -q "$IMAGE" >/dev/null 2>&1 || true
 
 echo
 say "1) docker scout cves — nativní výstup (CVE podle balíčků, filtr HIGH+CRITICAL):"
-run docker scout cves --only-severity critical,high "$IMAGE" || warn "sken selhal (přihlášení / síť?)"
+# --only-package-type os: jen OS balíčky (nginx je OS image) → Scout neřeší Java artefakty
+run docker scout cves --only-severity critical,high --only-package-type os "$IMAGE" || warn "sken selhal (přihlášení / síť?)"
 
 echo
 say "2) docker scout recommendations — unikátní feature: návrh lepšího base image:"
@@ -24,4 +25,4 @@ run docker scout recommendations "$IMAGE" || warn "doporučení selhalo (přihl�
 
 echo
 good "'cves' ukáže zranitelnosti; 'recommendations' přímo navrhne, na jaký tag přejít kvůli menšímu počtu CVE."
-say "Tip: pro srovnání zkus moderní image:  docker scout cves --only-severity critical,high nginx:stable-alpine"
+say "Tip: pro srovnání zkus moderní image:  docker scout cves --only-severity critical,high --only-package-type os nginx:stable-alpine"
