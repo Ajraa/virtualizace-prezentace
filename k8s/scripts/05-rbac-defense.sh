@@ -25,16 +25,27 @@ kube_apply "$MANIFESTS/secure/02-rbac-minimal.yaml"
 pause
 
 echo
-say "2) Ověření právy SA přes 'kubectl auth can-i' (dřívější postupy z 01 teď padnou):"
-expect_fail "SA safeapp-sa NESMÍ číst secrets" -- \
-  kubectl auth can-i get secrets --as="$SA" -n "$NS_SECURE"
-expect_fail "SA safeapp-sa NESMÍ vytvářet pody" -- \
-  kubectl auth can-i create pods --as="$SA" -n "$NS_SECURE"
-expect_fail "SA safeapp-sa NESMÍ nic v kube-system" -- \
-  kubectl auth can-i get secrets --as="$SA" -n kube-system
+say "2) REÁLNÉ pokusy jménem SA (impersonace přes --as) — přesně postupy z 01, teď padnou."
+say "   RBAC se vyhodnotí pro '${C_BLD}${SA}${C_RST}', takže API vrátí tvrdou hlášku Forbidden."
 echo
-say "   Co SA naopak SMÍ (minimální nutné právo — čtení ConfigMap):"
-run kubectl auth can-i get configmaps --as="$SA" -n "$NS_SECURE"
+say "2a) Vylistovat secrets v namespace (v 01 takhle unikly):"
+expect_fail "SA safeapp-sa NESMÍ číst secrets" -- \
+  kubectl get secrets --as="$SA" -n "$NS_SECURE"
+echo
+say "2b) Přečíst konkrétní secret (v 01 se takhle dešifroval):"
+expect_fail "SA safeapp-sa NESMÍ číst app-secrets" -- \
+  kubectl get secret app-secrets --as="$SA" -n "$NS_SECURE" -o yaml
+echo
+say "2c) Vytvořit pod (v 01 takhle vznikl attacker-pod):"
+expect_fail "SA safeapp-sa NESMÍ vytvářet pody" -- \
+  kubectl run attacker-pod --image=alpine:latest --as="$SA" -n "$NS_SECURE" --command -- sleep 3600
+echo
+say "2d) Cokoli v kube-system (v 01 odtud šly číst systémové secrets):"
+expect_fail "SA safeapp-sa NESMÍ nic v kube-system" -- \
+  kubectl get secrets --as="$SA" -n kube-system
+echo
+say "   Co SA naopak SMÍ (minimální nutné právo — čtení ConfigMap) → projde bez chyby:"
+run kubectl get configmaps --as="$SA" -n "$NS_SECURE"
 pause
 
 echo
