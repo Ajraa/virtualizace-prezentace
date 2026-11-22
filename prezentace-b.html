@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bezpečnost Kubernetes (k3s)</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --fg:#e6edf3; --muted:#9aa7b4;
+    --accent:#58a6ff; --red:#ff6b6b; --redbg:#2d1619; --green:#3fb950; --greenbg:#102417;
+    --yellow:#d9a441; --border:#30363d; --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden;
+  }
+  .deck{height:100vh;width:100vw;position:relative}
+  .slide{
+    position:absolute;inset:0;display:none;flex-direction:column;
+    padding:56px 72px 72px;overflow:auto;
+  }
+  .slide.active{display:flex;animation:fade .35s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  h1{font-size:52px;line-height:1.1;margin-bottom:18px;letter-spacing:-1px}
+  h2{font-size:34px;margin-bottom:22px;color:var(--fg);letter-spacing:-.5px}
+  h2 .tag{font-size:15px;vertical-align:middle;color:var(--accent);
+    border:1px solid var(--accent);border-radius:20px;padding:3px 12px;margin-left:12px;font-weight:600}
+  h2 .badge{font-size:15px;vertical-align:middle;background:var(--accent);color:#06101f;
+    border-radius:20px;padding:3px 13px;margin-left:12px;font-weight:700;letter-spacing:.3px}
+  h3{font-size:20px;margin:18px 0 10px;color:var(--accent)}
+  p,li{font-size:19px;line-height:1.55;color:var(--fg)}
+  ul{margin-left:24px;margin-top:6px}
+  li{margin-bottom:9px}
+  .muted{color:var(--muted)}
+  .lead{font-size:23px;color:var(--muted);max-width:60ch}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:8px}
+  .cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:10px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px 22px}
+  .card.bad{border-color:#5c2a2f;background:var(--redbg)}
+  .card.good{border-color:#1f5c33;background:var(--greenbg)}
+  .card h3{margin-top:0}
+  .card.bad h3{color:var(--red)} .card.good h3{color:var(--green)}
+  code,pre{font-family:var(--mono)}
+  pre{background:#010409;border:1px solid var(--border);border-radius:10px;
+    padding:16px 18px;overflow:auto;font-size:15.5px;line-height:1.5;margin-top:10px}
+  pre .c{color:#7d8590} pre .o{color:var(--red)} pre .g{color:var(--green)} pre .k{color:var(--accent)}
+  code.inline{background:var(--panel2);padding:2px 7px;border-radius:6px;font-size:.92em;color:#ffd9a0}
+  table{border-collapse:collapse;width:100%;margin-top:10px;font-size:16px}
+  th,td{border:1px solid var(--border);padding:9px 12px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--accent);font-size:14px;text-transform:uppercase;letter-spacing:.5px}
+  tr:nth-child(even) td{background:var(--panel)}
+  .pill{display:inline-block;font-size:13px;font-weight:600;padding:3px 10px;border-radius:20px;margin-right:6px}
+  .pill.r{background:var(--redbg);color:var(--red);border:1px solid #5c2a2f}
+  .pill.y{background:#2a2410;color:var(--yellow);border:1px solid #5c4a1f}
+  .pill.g{background:var(--greenbg);color:var(--green);border:1px solid #1f5c33}
+  .center{align-items:center;justify-content:center;text-align:center}
+  .kicker{color:var(--accent);font-weight:700;letter-spacing:3px;text-transform:uppercase;font-size:15px;margin-bottom:18px}
+  .foot{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-between;
+    align-items:center;padding:12px 24px;font-size:13px;color:var(--muted);
+    background:linear-gradient(transparent,var(--bg) 40%)}
+  .bar{position:fixed;top:0;left:0;height:3px;background:var(--accent);transition:width .35s;z-index:10}
+  .nav{display:flex;gap:8px}
+  .nav button{background:var(--panel2);color:var(--fg);border:1px solid var(--border);
+    border-radius:7px;padding:5px 12px;cursor:pointer;font-size:14px}
+  .nav button:hover{border-color:var(--accent)}
+  .big{font-size:26px;line-height:1.5}
+  .flow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:17px}
+  .flow .step{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 16px}
+  .flow .arr{color:var(--accent);font-size:22px}
+  .hint{font-size:14px;color:var(--muted);margin-top:14px}
+  .two-line{font-size:17px}
+  .warnbox{border-left:4px solid var(--yellow);background:#1f1b0e;padding:12px 18px;border-radius:0 8px 8px 0;margin-top:14px;font-size:17px}
+  .caps{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .caps code{font-family:var(--mono);font-size:13px;background:var(--panel2);border:1px solid var(--border);padding:3px 8px;border-radius:6px;color:#ffd9a0}
+  .caps code.danger{color:var(--red);border-color:#5c2a2f;background:var(--redbg)}
+  .caps code.safe{color:var(--green);border-color:#1f5c33;background:var(--greenbg)}
+  .caps code.off{color:var(--muted);text-decoration:line-through;opacity:.6}
+  .capdefs{display:grid;grid-template-columns:1fr 1fr;gap:5px 28px;margin-top:10px;font-size:14px}
+  .capdefs div{display:flex;gap:8px;align-items:baseline;line-height:1.3}
+  .capdefs code{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px solid var(--border);padding:2px 6px;border-radius:5px;color:#ffd9a0;white-space:nowrap}
+  .capdefs span{color:var(--muted)}
+  .scen{margin:-10px 0 16px;font-size:14px;color:var(--muted);display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .scen .pill{font-size:12px;padding:2px 9px}
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<div class="deck" id="deck">
+
+  <!-- 1 · Úvod -->
+  <section class="slide active center">
+    <div class="kicker">Zadání č. 6 B · Virtualizace</div>
+    <h1>Bezpečnost Kubernetes (k3s)</h1>
+    <p class="lead">Z části A víme: izolace jednoho kontejneru nestačí. Útok nepřišel přes aplikaci, ale přes vystavený control-plane. U Kubernetes to platí na <b>dvou vrstvách</b>.</p>
+    <p class="muted" style="margin-top:28px">Zabezpečený deployment na k3s · RBAC · Secrets · NetworkPolicy · Pod Security · obě vrstvy obrany</p>
+    <p class="hint">Ovládání: → / mezerník vpřed · ← zpět · F celá obrazovka · modré odznaky = číslo skriptu k ukázce (<code class="inline">k8s/scripts/</code>)</p>
+  </section>
+
+  <!-- 2 · Návaznost na A -->
+  <section class="slide">
+    <h2>Návaznost na část A — TeamTNT <span class="tag">proč vznikla část B</span></h2>
+    <p class="lead" style="font-size:20px;margin-bottom:14px">V A jsme uzavřeli: <b>hardening jednoho kontejneru útok TeamTNT nezastaví</b>, protože útočník nejde přes aplikaci — jde přes vystavený <b>control-plane</b> (Docker API / socket na hostiteli).</p>
+    <div class="cols">
+      <div class="card bad">
+        <h3>Co ukázalo A</h3>
+        <ul>
+          <li>TeamTNT skenoval <b>vystavené Docker API</b> (TCP 2375)</li>
+          <li>přes API spustil vlastní <code class="inline">--privileged</code> kontejner s <code class="inline">-v /:/host</code> → <b>root na hostiteli</b></li>
+          <li>vstup nebyl bug v appce, ale <b>otevřený control-plane</b></li>
+        </ul>
+        <p style="font-size:15px" class="muted">Obrana A: nevystavovat API, rootless / userns-remap.</p>
+      </div>
+      <div class="card good">
+        <h3>Co přidává B — dvě vrstvy</h3>
+        <ul>
+          <li><b>Kubernetes vrstva</b> (k3s): RBAC, SA, Secrets, NetworkPolicy, Pod Security, image, limity</li>
+          <li><b>Vrstva hostitele/runtime</b> (Docker na worker nodu): i perfektní RBAC/PSA je k ničemu, když node vystavuje Docker API</li>
+        </ul>
+        <p style="font-size:15px" class="muted">Zaměření B: primárně <b>obrana</b> + ověření, že dřívější postup selže.</p>
+      </div>
+    </div>
+    <div class="warnbox"><b>Teze celé části B:</b> Kubernetes je nutné bránit na <b>obou</b> vrstvách — K8s hardening sám o sobě nestačí bez hardeningu hostitele.</div>
+  </section>
+
+  <!-- 3 · Topologie -->
+  <section class="slide">
+    <h2>Topologie laboratoře <span class="tag">2 VM · izolovaná síť</span></h2>
+    <p class="lead" style="font-size:20px">Dvě VM v izolované laboratorní síti. VM2 je <b>Docker host z projektu A</b>, nyní připojený jako k3s agent s Docker runtime.</p>
+    <div class="flow">
+      <div class="step"><b>VM1 · k3s-server</b><br><span class="muted" style="font-size:14px">control-plane + workload, datastore (sqlite/etcd), API :6443</span></div>
+      <span class="arr">⇄</span>
+      <div class="step"><b>VM2 · docker-node</b><br><span class="muted" style="font-size:14px">k3s agent <code class="inline">--docker</code>, pody = Docker kontejnery</span></div>
+    </div>
+    <div class="cols" style="margin-top:20px">
+      <div class="card">
+        <h3>Jak se agent připojí</h3>
+        <pre><span class="c"># na VM2 (má Docker z projektu A)</span>
+curl -sfL https://get.k3s.io | \
+ K3S_URL=https://<span class="k">$K3S_SERVER_IP</span>:6443 \
+ K3S_TOKEN=<span class="k">$K3S_TOKEN</span> \
+ sh -s - <span class="g">--docker</span></pre>
+        <p style="font-size:15px;margin-top:8px" class="muted">Žádné hardcoded IP — vše z <code class="inline">k8s/scripts/env.sh</code>.</p>
+      </div>
+      <div class="card">
+        <h3>Proč na tom záleží</h3>
+        <ul style="margin-top:0">
+          <li>Pody VM2 reálně běží jako <b>Docker kontejnery</b> (embedded <code class="inline">cri-dockerd</code>, k3s 1.24+)</li>
+          <li>Kdo ovládne Docker na VM2, ovládne pody <b>mimo dohled Kubernetes</b></li>
+          <li>Přesně to spojuje B zpět na TeamTNT z A</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · Proč k3s -->
+  <section class="slide">
+    <h2>Proč k3s <span class="tag">lehký, ale plnohodnotný</span></h2>
+    <p class="lead">k3s = jednobinární Kubernetes (SUSE/Rancher). Rychlá instalace jedním skriptem, embedded datastore. <b>Bezpečnostní modely jsou identické s plným Kubernetes</b>, takže demonstrace je plně přenositelná.</p>
+    <div class="cols3" style="margin-top:18px">
+      <div class="card">
+        <h3>Lehký do laboratoře</h3>
+        <p>Jeden binary, nízké nároky, ideální na VM. <code class="inline">curl -sfL https://get.k3s.io | sh</code>.</p>
+      </div>
+      <div class="card good">
+        <h3>Stejné mechanismy</h3>
+        <p>RBAC, PSA, NetworkPolicy, Secrets — <b>stejné API i chování</b> jako „velký" K8s.</p>
+      </div>
+      <div class="card">
+        <h3>Baterie uvnitř</h3>
+        <p>flannel + <b>kube-router</b> (NetworkPolicy funguje out-of-the-box), admission <code class="inline">PodSecurity</code> + <code class="inline">NodeRestriction</code> (1.25+).</p>
+      </div>
+    </div>
+    <div class="warnbox"><b>Pozor na jedno:</b> <code class="inline">--secrets-encryption</code> se zapíná jen <b>při prvním startu</b> serveru (vygeneruje AES klíč). Dodatečně <b>nelze</b> — insecure cluster startuje bez něj, secure s ním.</div>
+  </section>
+
+  <!-- 5 · Mapa útočné plochy -->
+  <section class="slide">
+    <h2>Mapa útočné plochy Kubernetes</h2>
+    <p class="lead" style="font-size:20px;margin-bottom:14px">Tři vrstvy, kde se chybná konfigurace projeví. Část B pokrývá všechny tři — včetně té, kterou RBAC/PSA neřeší.</p>
+    <div class="cols3">
+      <div class="card">
+        <h3>Control-plane</h3>
+        <p>API server (:6443), kubelet, datastore (etcd/sqlite). Anonymní přístup, nešifrovaný datastore, slabý RBAC.</p>
+      </div>
+      <div class="card">
+        <h3>Workload</h3>
+        <p>Pody, <b>ServiceAccount tokeny</b> (automount), Secrets v ENV, privileged/hostPath, žádné limity, plochá síť.</p>
+      </div>
+      <div class="card bad">
+        <h3>Node / runtime</h3>
+        <p>Docker na VM2. Vystavené API 2375 = <b>převzetí nodu mimo K8s</b>. Sem RBAC/PSA nedosáhnou.</p>
+      </div>
+    </div>
+    <div class="warnbox"><b>Reálné kampaně:</b> TeamTNT a Hildegard cílily přesně na špatně zabezpečené Kubernetes/Docker API a SA tokeny — miner a laterální pohyb po převzetí nodu. B ukazuje obranu každé vrstvy.</div>
+  </section>
+
+  <!-- 6 · RBAC & ServiceAccount -->
+  <section class="slide">
+    <h2>RBAC &amp; ServiceAccount <span class="badge">skript 01/05</span></h2>
+    <div class="scen">Scénář: <span class="pill r">NEBEZPEČNÉ</span> cluster-admin + automount → <span class="pill g">HARDENED</span> minimální Role</div>
+    <div class="cols">
+      <div class="card bad">
+        <h3>NEBEZPEČNÉ — SA = cluster-admin</h3>
+        <p>SA <code class="inline">app-sa</code> navázaný přes ClusterRoleBinding na <code class="inline">cluster-admin</code>, token <b>automountnutý</b> do podu.</p>
+        <pre><span class="c"># z podu, přes automount token:</span>
+TOKEN=$(cat /var/run/secrets/kubernetes.io/\
+serviceaccount/token)
+curl -sk -H "Authorization: Bearer $TOKEN" \
+ https://kubernetes.default/api/v1/secrets
+<span class="o"># → secrets napříč namespaces + lze vytvořit pod</span></pre>
+      </div>
+      <div class="card good">
+        <h3>HARDENED — least privilege</h3>
+        <pre>automountServiceAccountToken: <span class="g">false</span>
+<span class="c"># minimální Role, žádný přístup k secrets</span></pre>
+        <p style="margin-top:8px">Dedikovaný SA <code class="inline">safeapp-sa</code>, token se do podu nevkládá, Role dává jen nezbytné.</p>
+        <pre><span class="c"># ověření zákazu:</span>
+kubectl auth can-i get secrets \
+ --as=system:serviceaccount:secure-demo:safeapp-sa
+<span class="g"># → no   (BLOKOVÁNO)</span></pre>
+      </div>
+    </div>
+    <p class="hint">Princip: pod dostane jen tolik práv, kolik appka opravdu potřebuje — RCE v podu pak nedá útočníkovi klíče od clusteru.</p>
+  </section>
+
+  <!-- 7 · Secrets -->
+  <section class="slide">
+    <h2>Secrets <span class="badge">skript 02/06</span></h2>
+    <div class="scen">Scénář: <span class="pill r">NEBEZPEČNÉ</span> ENV + nešifrovaný datastore → <span class="pill g">HARDENED</span> soubor + šifrování</div>
+    <div class="cols">
+      <div class="card bad">
+        <h3>NEBEZPEČNÉ — ENV + plaintext</h3>
+        <p>Secret předaný jako <b>ENV proměnná</b> a datastore <b>bez šifrování</b> (k3s bez <code class="inline">--secrets-encryption</code>).</p>
+        <pre>kubectl describe pod vulnapp   <span class="c"># vidí ENV</span>
+kubectl exec vulnapp -- env    <span class="o"># DB_PASSWORD=...</span>
+<span class="c"># bez šifrování čitelné přímo z datastore</span></pre>
+      </div>
+      <div class="card good">
+        <h3>HARDENED — soubor + encryption</h3>
+        <pre><span class="c"># mount jako read-only soubor, ne ENV</span>
+volumeMounts: <span class="g">/run/secrets</span> (readOnly)</pre>
+        <p style="margin-top:8px">App čte secret ze souboru → není v <code class="inline">env</code> ani <code class="inline">describe</code>; RBAC čtení secrets přes API zakazuje.</p>
+        <pre><span class="c"># datastore šifrovaný (klíč z 1. startu):</span>
+k3s secrets-encrypt status
+<span class="g"># Encryption Status: Enabled</span></pre>
+      </div>
+    </div>
+    <div class="warnbox"><code class="inline">--secrets-encryption</code> musí být nastaveno při <b>prvním</b> startu serveru — vygeneruje AES-CBC klíč do <code class="inline">encryption-config.json</code>. Zapnout dodatečně nejde.</div>
+  </section>
+
+  <!-- 8 · NetworkPolicy -->
+  <section class="slide">
+    <h2>NetworkPolicy <span class="badge">skript 03/07</span></h2>
+    <div class="scen">Scénář: <span class="pill r">NEBEZPEČNÉ</span> plochá síť → <span class="pill g">HARDENED</span> default-deny</div>
+    <div class="cols">
+      <div class="card bad">
+        <h3>NEBEZPEČNÉ — bez policy</h3>
+        <p>Bez NetworkPolicy je provoz <b>plochý</b>: pod↔pod napříč namespaces, volný egress ven.</p>
+        <pre><span class="c"># z podu v insecure-demo:</span>
+curl http://victim.secure-demo <span class="o"># PROJDE</span>
+curl http://evil-c2.example      <span class="o"># egress volný</span>
+<span class="o"># → prostor pro laterální pohyb a C2</span></pre>
+      </div>
+      <div class="card good">
+        <h3>HARDENED — default-deny + cílené</h3>
+        <pre><span class="c"># deny vše, pak povolit jen nutné</span>
+policyTypes: [<span class="g">Ingress, Egress</span>]
+<span class="g"># povoleno: frontend→backend, DNS</span></pre>
+        <p style="margin-top:8px">Vynucuje kube-router. Ostatní toky selžou:</p>
+        <pre>curl http://victim.secure-demo
+<span class="g"># timeout → BLOKOVÁNO</span></pre>
+      </div>
+    </div>
+    <p class="hint">Segmentace (frontend / backend / db) brání laterálnímu pohybu i exfiltraci — povolen jen tok, který appka reálně potřebuje, plus DNS na kube-dns.</p>
+  </section>
+
+  <!-- 9 · Pod Security -->
+  <section class="slide">
+    <h2>Pod Security Admission <span class="badge">skript 08</span></h2>
+    <div class="scen">Scénář: <span class="pill r">NEBEZPEČNÉ</span> privileged/root/hostPath → <span class="pill g">HARDENED</span> PSA <code class="inline">restricted</code></div>
+    <div class="cols">
+      <div class="card bad">
+        <h3>NEBEZPEČNÉ — namespace bez PSA</h3>
+        <p>Namespace bez labelu povolí <b>privileged</b> pod, <code class="inline">runAsUser: 0</code>, <code class="inline">hostPath: /</code>.</p>
+        <pre>securityContext:
+  <span class="o">privileged: true</span>
+  <span class="o">runAsUser: 0</span>
+volumes: [{hostPath: {path: <span class="o">/</span>}}]
+<span class="o"># pod naběhne — FS hostitele v podu</span></pre>
+      </div>
+      <div class="card good">
+        <h3>HARDENED — <code class="inline">enforce: restricted</code></h3>
+        <pre><span class="c"># label na namespace</span>
+pod-security.kubernetes.io/enforce: <span class="g">restricted</span></pre>
+        <p style="margin-top:8px">Admission controller privileged pod <b>odmítne už při vytvoření</b>:</p>
+        <pre>kubectl apply -f privileged-pod.yaml
+<span class="g"># Error: violates PodSecurity "restricted"
+# → BLOKOVÁNO</span></pre>
+      </div>
+    </div>
+    <div class="warnbox"><code class="inline">restricted</code> <b>není</b> default — zapíná se labelem na namespace. <code class="inline">safeapp</code> má <code class="inline">runAsNonRoot</code>, <code class="inline">drop ALL</code>, <code class="inline">readOnlyRootFilesystem</code>, <code class="inline">seccompProfile: RuntimeDefault</code> → projde.</div>
+  </section>
+
+  <!-- 10 · Image security -->
+  <section class="slide">
+    <h2>Image security — Trivy <span class="badge">skript 12</span></h2>
+    <div class="scen">Scénář: <span class="pill r">NEBEZPEČNÉ</span> <code class="inline">:latest</code> → <span class="pill g">HARDENED</span> digest pin + sken</div>
+    <div class="cols">
+      <div class="card bad">
+        <h3>NEBEZPEČNÉ — <code class="inline">:latest</code></h3>
+        <p>Plovoucí tag = neznámý obsah, žádná reprodukovatelnost, tiché záplaty i regrese.</p>
+        <pre>image: myapp:<span class="o">latest</span></pre>
+      </div>
+      <div class="card good">
+        <h3>HARDENED — pin na digest</h3>
+        <pre>image: myapp@<span class="g">sha256:abc123…</span></pre>
+        <p style="margin-top:8px">Nezměnitelný obsah + zákaz <code class="inline">:latest</code> + sken v CI.</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;padding:16px 20px">
+      <h3 style="margin-top:0">Trivy — dva režimy (z projektu A)</h3>
+      <pre><span class="c"># 1) zranitelnosti v image</span>
+trivy image <span class="g">--severity HIGH,CRITICAL</span> myapp@sha256:...
+<span class="c"># 2) misconfig sken Kubernetes manifestů</span>
+trivy config <span class="g">k8s/manifests/insecure</span>   <span class="o"># privileged, runAsRoot, chybí limity</span>
+trivy config <span class="g">k8s/manifests/secure</span>     <span class="g"># čisté</span></pre>
+      <p style="font-size:15px;margin-top:8px" class="muted"><code class="inline">trivy config</code> odhalí špatně nakonfigurované manifesty ještě před nasazením — insecure vs. secure jasně odliší.</p>
+    </div>
+  </section>
+
+  <!-- 11 · Resource limits -->
+  <section class="slide">
+    <h2>Resource limits <span class="badge">skript 04/12</span></h2>
+    <div class="scen">Scénář: <span class="pill r">NEBEZPEČNÉ</span> bez limitů → <span class="pill g">HARDENED</span> requests/limits + kvóty</div>
+    <div class="cols">
+      <div class="card bad">
+        <h3>NEBEZPEČNÉ — bez limitů</h3>
+        <p>Neškodný <b>busy-loop</b> pod (žádná reálná těžba) zabere CPU celého nodu = DoS efekt.</p>
+        <pre><span class="c"># pod bez limits:</span>
+while true; do :; done
+kubectl top pod   <span class="o"># CPU na stropu nodu</span></pre>
+      </div>
+      <div class="card good">
+        <h3>HARDENED — limity + kvóty</h3>
+        <pre>resources:
+  requests: {cpu: 100m, memory: 64Mi}
+  <span class="g">limits:   {cpu: 500m, memory: 256Mi}</span></pre>
+        <p style="margin-top:8px">Navíc <b>LimitRange</b> (default limity) + <b>ResourceQuota</b> na namespace — strop platí i pro zapomenutý pod.</p>
+        <pre><span class="c"># busy-loop narazí na strop (throttling)</span>
+<span class="g"># node zůstane použitelný → BLOKOVÁNO</span></pre>
+      </div>
+    </div>
+    <p class="hint">LimitRange vynutí default limit u podů, které si ho samy nenastaví; ResourceQuota ohraničí celkovou spotřebu namespacu.</p>
+  </section>
+
+  <!-- 12 · Host / Docker runtime -->
+  <section class="slide">
+    <h2>Host / Docker runtime <span class="badge">skript 09/10</span> <span class="tag">pointa návaznosti na A</span></h2>
+    <div class="scen">Scénář: <span class="pill r">NEBEZPEČNÉ</span> Docker API 2375 → <span class="pill g">HARDENED</span> zavřené API + userns-remap</div>
+    <div class="cols">
+      <div class="card bad">
+        <h3>NEBEZPEČNÉ — vystavené API 2375</h3>
+        <pre><span class="c"># útočník přímo na Docker na VM2:</span>
+docker -H <span class="o">tcp://docker-node:2375</span> run \
+  -v /:/host alpine \
+  head /host/etc/shadow
+<span class="o"># root na nodu — mimo Kubernetes</span>
+kubectl get pods -A <span class="o"># tento kontejner NEVIDÍ</span></pre>
+        <p style="margin-top:8px;font-size:16px">Přesně vektor <b>TeamTNT z části A</b>. RBAC, PSA, NetworkPolicy sem <b>nedosáhnou</b> — K8s o kontejneru neví.</p>
+      </div>
+      <div class="card good">
+        <h3>HARDENED — zavřít control-plane hostitele</h3>
+        <ul style="margin-top:0">
+          <li>Docker API <b>nevystavovat</b> — jen unix socket, příp. <b>mTLS</b> na 2376</li>
+          <li><b>Firewall</b> blokuje 2375 na izolované síti</li>
+          <li><code class="inline">userns-remap</code> — container root ≠ host root</li>
+          <li><code class="inline">no-new-privileges</code> v <code class="inline">daemon.json</code></li>
+        </ul>
+        <pre>docker -H tcp://docker-node:2375 ...
+<span class="g"># connection refused → BLOKOVÁNO</span></pre>
+      </div>
+    </div>
+    <div class="warnbox"><b>Pointa celé části B:</b> i dokonalý Kubernetes hardening je k ničemu, když worker node vystavuje Docker API. Obrana musí být na <b>obou</b> vrstvách — přesně jako jsme slíbili v závěru A.</div>
+  </section>
+
+  <!-- 13 · Tabulka -->
+  <section class="slide">
+    <h2>Chybná konfigurace ↔ dopad ↔ obrana</h2>
+    <table>
+      <tr><th>Chybná konfigurace</th><th>Dopad</th><th>Nastavení, které brání</th></tr>
+      <tr><td>SA = cluster-admin + automount</td><td>Z podu čtení secrets, tvorba podů</td><td>Minimální Role, <code class="inline">automountServiceAccountToken: false</code></td></tr>
+      <tr><td>Secret v ENV, nešifrovaný datastore</td><td>Únik hesel/klíčů</td><td>Soubor v <code class="inline">/run/secrets</code>, <code class="inline">--secrets-encryption</code></td></tr>
+      <tr><td>Bez NetworkPolicy (plochá síť)</td><td>Laterální pohyb, volný C2 egress</td><td>Default-deny ingress+egress + cílené povolení</td></tr>
+      <tr><td>privileged / root / <code class="inline">hostPath: /</code></td><td>Přístup k FS a jádru hostitele</td><td>PSA <code class="inline">restricted</code>, <code class="inline">runAsNonRoot</code>, <code class="inline">drop ALL</code></td></tr>
+      <tr><td>Image <code class="inline">:latest</code></td><td>Neznámý obsah, známé CVE</td><td>Pin na digest, Trivy image + <code class="inline">config</code></td></tr>
+      <tr><td>Bez resource limits</td><td>DoS nodu</td><td>requests/limits, LimitRange, ResourceQuota</td></tr>
+      <tr><td><b>Vystavené Docker API 2375 (host)</b></td><td><b>Převzetí nodu mimo dohled K8s</b></td><td><b>Zavřené API / mTLS, firewall, userns-remap</b></td></tr>
+    </table>
+    <p class="hint">Poslední řádek je vrstva, kterou Kubernetes sám neřeší — a právě ta spojuje část B zpět na TeamTNT z A.</p>
+  </section>
+
+  <!-- 14 · Závěrečná analýza -->
+  <section class="slide">
+    <h2>Jaké riziko představuje nesprávná konfigurace Kubernetes?</h2>
+    <p class="lead" style="font-size:20px;margin-bottom:14px">Shrnutí bezpečnostní analýzy — povinný výstup zadání.</p>
+    <div class="cols">
+      <div class="card bad">
+        <h3>Rizika chybné konfigurace</h3>
+        <ul style="margin-top:0">
+          <li><b>Eskalace práv:</b> přeprivilegovaný SA → z jednoho podu kontrola celého clusteru</li>
+          <li><b>Únik dat:</b> secrets v ENV a nešifrovaném datastore</li>
+          <li><b>Laterální pohyb a C2:</b> plochá síť bez NetworkPolicy</li>
+          <li><b>Útěk z kontejneru:</b> privileged / hostPath / root</li>
+          <li><b>DoS:</b> pody bez limitů položí node</li>
+          <li><b>Převzetí nodu:</b> vystavené Docker API mimo dohled K8s</li>
+        </ul>
+      </div>
+      <div class="card good">
+        <h3>Principy obrany</h3>
+        <ul style="margin-top:0">
+          <li><b>Defense-in-depth přes obě vrstvy:</b> Kubernetes <i>i</i> hostitel/runtime</li>
+          <li><b>Least privilege:</b> minimální RBAC, drop capabilities, non-root, PSA <code class="inline">restricted</code></li>
+          <li><b>Default-deny:</b> síť i oprávnění zavřít a otevřít jen nutné</li>
+          <li><b>Šifrování a sken:</b> secrets-encryption, Trivy image + config</li>
+          <li><b>Ověřování obrany:</b> po zabezpečení dřívější útok měřitelně <b>selže</b></li>
+        </ul>
+      </div>
+    </div>
+    <div class="warnbox"><b>Hlavní závěr:</b> Kubernetes hardening sám o sobě <b>nestačí</b> bez hardeningu hostitele. Perfektní RBAC a PSA neochrání cluster, jehož worker node vystavuje Docker API — riziko je nejvyšší právě tam, kde se zabezpečí jen jedna vrstva.</div>
+  </section>
+
+  <!-- 15 · Shrnutí -->
+  <section class="slide center">
+    <div class="kicker">Shrnutí</div>
+    <h1 style="font-size:40px">Bezpečnost na obou vrstvách, ne jen v Kubernetes</h1>
+    <div class="cols" style="max-width:900px;margin-top:10px">
+      <div class="card bad"><h3>Nebezpečné</h3><p>cluster-admin SA · secrets v ENV · plochá síť · privileged · <code class="inline">:latest</code> · bez limitů · vystavené API 2375</p></div>
+      <div class="card good"><h3>Hardened</h3><p>minimální RBAC · secrets soubor + šifrování · default-deny · PSA restricted · digest pin + Trivy · limity · zavřené API</p></div>
+    </div>
+    <p class="big" style="margin-top:26px"><b>Least privilege</b> + <b>defense-in-depth přes K8s i hostitele</b> = drtivá většina rizik zmizí.</p>
+    <p class="hint">Děkuji za pozornost · skripty ve složce <code class="inline">k8s/scripts/</code> · navazuje na část A</p>
+  </section>
+
+</div>
+
+<div class="foot">
+  <div>Bezpečnost Kubernetes (k3s) · Zadání 6 B</div>
+  <div class="nav">
+    <button onclick="go(-1)">← Zpět</button>
+    <span id="counter" style="min-width:64px;text-align:center;line-height:30px">1 / 15</span>
+    <button onclick="go(1)">Vpřed →</button>
+  </div>
+</div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  let i=0;
+  function render(){
+    slides.forEach((s,n)=>s.classList.toggle('active',n===i));
+    document.getElementById('bar').style.width=((i+1)/slides.length*100)+'%';
+    document.getElementById('counter').textContent=(i+1)+' / '+slides.length;
+  }
+  function go(d){i=Math.min(slides.length-1,Math.max(0,i+d));render()}
+  document.addEventListener('keydown',e=>{
+    if(['ArrowRight',' ','PageDown'].includes(e.key)){e.preventDefault();go(1)}
+    else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();go(-1)}
+    else if(e.key==='Home'){i=0;render()}
+    else if(e.key==='End'){i=slides.length-1;render()}
+    else if(e.key.toLowerCase()==='f'){
+      if(!document.fullscreenElement)document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+  });
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+# RESOURCE LIMITS — AC16.
+# LimitRange dá podům bez explicitních limitů rozumné defaulty a strop,
+# ResourceQuota omezí celkovou spotřebu namespace → CPU žrout z 04-no-limits-dos.sh
+# narazí na strop a nedokáže zahltit celý node.
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: secure-demo
+spec:
+  limits:
+    - type: Container
+      default:            # strop, pokud kontejner limits neuvede
+        cpu: "200m"
+        memory: "64Mi"
+      defaultRequest:     # request, pokud kontejner requests neuvede
+        cpu: "50m"
+        memory: "32Mi"
+      max:                # nikdo si nesmí vyžádat víc
+        cpu: "500m"
+        memory: "128Mi"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: namespace-quota
+  namespace: secure-demo
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 512Mi
+    limits.cpu: "2"
+    limits.memory: 1Gi
+    pods: "10"

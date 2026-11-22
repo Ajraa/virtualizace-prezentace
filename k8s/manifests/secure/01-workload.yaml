@@ -1,0 +1,116 @@
+# ZABEZPEČENÝ workload — AC14 (PSA restricted), AC4-obrana, AC15 (pin digest), AC16 (limits), AC12 (secret jako soubor).
+#
+# Namespace vynucuje Pod Security Admission profil `restricted` (enforce) —
+# admission controller odmítne jakýkoli privileged / root / hostPath pod.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: secure-demo
+  labels:
+    demo: k8s-security
+    variant: secure
+    # AC14: PSA restricted v režimu enforce (+ audit/warn pro přehled).
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: safeapp
+  namespace: secure-demo
+  labels:
+    app: safeapp
+    role: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: safeapp
+  template:
+    metadata:
+      labels:
+        app: safeapp
+        role: backend
+    spec:
+      # AC11: dedikovaný SA bez automountu tokenu (viz 02-rbac-minimal.yaml).
+      serviceAccountName: safeapp-sa
+      automountServiceAccountToken: false
+      # AC14: pod-level security context vyhovující profilu `restricted`.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: safeapp
+          # AC15: image PINOVANÝ NA DIGEST (ne :latest). Placeholder — nutno doplnit!
+          # TODO(student): nahraď reálným digestem, např.:
+          #   docker pull alpine:3.19 && docker inspect --format='{{index .RepoDigests 0}}' alpine:3.19
+          #   nebo:  skopeo inspect docker://alpine:3.19 | jq -r .Digest
+          #   nebo:  crane digest alpine:3.19
+          image: alpine@sha256:PLACEHOLDER_DOPLN_REALNY_DIGEST_ALPINE_3_19
+          command: ["sh", "-c"]
+          args:
+            - |
+              mkdir -p /tmp/www
+              echo "safeapp (secure demo)" > /tmp/www/index.html
+              exec httpd -f -p 8080 -h /tmp/www
+          ports:
+            - containerPort: 8080
+          # AC14: kontejner-level restricted securityContext.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          # AC16: povinné resource requests + limits.
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "64Mi"
+          volumeMounts:
+            # Kořenový FS je read-only → zapisovatelné adresáře jen jako emptyDir.
+            - name: tmp
+              mountPath: /tmp
+            # AC12: secret mountovaný jako read-only SOUBOR, ne ENV.
+            - name: secrets
+              mountPath: /run/secrets
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 10
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: secrets
+          secret:
+            secretName: safeapp-secrets
+            # 0440: čte jen vlastník (root) a skupina fsGroup 10001 (běžící proces). Ostatní nic.
+            defaultMode: 0440
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: safeapp
+  namespace: secure-demo
+spec:
+  selector:
+    app: safeapp
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

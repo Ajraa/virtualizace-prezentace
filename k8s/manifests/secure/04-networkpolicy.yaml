@@ -1,0 +1,86 @@
+# NETWORK POLICY — AC13.
+# Mikrosegmentace namespace secure-demo: default-deny vše, pak cílené povolení.
+# k3s vynucuje NetworkPolicy přes kube-router (funguje out-of-the-box).
+#
+# Obrana proti 03-no-netpol-lateral.sh: po nasazení selže cross-namespace curl
+# i neoprávněný egress ven; projde jen frontend→backend a DNS.
+---
+# 1) DEFAULT-DENY: žádný ingress ani egress pro žádný pod v namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: secure-demo
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# 2) Povolení DNS (jinak by default-deny egress rozbil překlad jmen).
+#    Egress na kube-dns (CoreDNS) ve kube-system, UDP i TCP 53.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: secure-demo
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# 3) Jediný povolený aplikační tok: frontend → backend na portu 8080.
+#    Ingress na backend pody přijímá jen od frontend podů ve STEJNÉM namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-backend
+  namespace: secure-demo
+spec:
+  podSelector:
+    matchLabels:
+      role: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              role: frontend
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# 4) Egress pro frontend pody: smí na backend (8080) + DNS už je povolené výše.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-egress-to-backend
+  namespace: secure-demo
+spec:
+  podSelector:
+    matchLabels:
+      role: frontend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              role: backend
+      ports:
+        - protocol: TCP
+          port: 8080

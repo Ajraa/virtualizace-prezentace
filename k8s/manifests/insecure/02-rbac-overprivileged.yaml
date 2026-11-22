@@ -1,0 +1,26 @@
+# ZÁMĚRNĚ příliš široké RBAC — AC5.
+# ServiceAccount aplikace je navázaný na cluster-admin. Jelikož je token
+# automountovaný do podu, kdokoli, kdo se dostane do kontejneru vulnapp,
+# má přes API server práva CELÉHO clusteru (číst secrets, vytvářet pody, …).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app-sa
+  namespace: insecure-demo
+---
+# Nejhorší možná varianta: binding aplikačního SA na vestavěný cluster-admin.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: app-sa-cluster-admin
+  labels:
+    demo: k8s-security
+    variant: insecure
+subjects:
+  - kind: ServiceAccount
+    name: app-sa
+    namespace: insecure-demo
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io

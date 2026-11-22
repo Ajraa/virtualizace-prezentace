@@ -1,0 +1,81 @@
+# ZÁMĚRNĚ NEZABEZPEČENÝ workload — slouží jen k demonstraci rizik na vlastní laboratorní VM.
+# Pokrývá AC4: namespace bez Pod Security, aplikace jako root, privileged, hostPath / , bez limitů, image :latest.
+#
+# Namespace NEMÁ žádný pod-security.kubernetes.io/* label → PSA nic nevynucuje,
+# takže projde i privileged pod (přesný opak secure varianty).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: insecure-demo
+  labels:
+    demo: k8s-security
+    variant: insecure
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vulnapp
+  namespace: insecure-demo
+  labels:
+    app: vulnapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vulnapp
+  template:
+    metadata:
+      labels:
+        app: vulnapp
+    spec:
+      # AC5: pod používá příliš privilegovaný ServiceAccount z 02-rbac-overprivileged.yaml
+      # s automountovaným tokenem (automountServiceAccountToken ponecháno na default = true).
+      serviceAccountName: app-sa
+      containers:
+        - name: vulnapp
+          # AC4 + AC15: nepinovaný :latest → nekontrolovatelná verze, žádná ochrana proti podvržení.
+          image: alpine:latest
+          # Jednoduchý busybox httpd, aby Service něco obsluhovala (demo laterálního pohybu).
+          command: ["sh", "-c"]
+          args:
+            - |
+              mkdir -p /www
+              echo "vulnapp (insecure demo)" > /www/index.html
+              exec httpd -f -p 8080 -h /www
+          ports:
+            - containerPort: 8080
+          # AC6: secret předaný jako ENV proměnné (uniká v describe/env/logu potomků).
+          envFrom:
+            - secretRef:
+                name: app-secrets
+          # AC4: privilegovaný kontejner běžící jako root — plný přístup k zařízením hostitele.
+          securityContext:
+            privileged: true
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: true
+          volumeMounts:
+            # AC4 + AC9 (host FS): namountovaný CELÝ kořenový FS hostitele.
+            - name: host-root
+              mountPath: /host
+          # AC8: ŽÁDNÉ resource requests/limits → pod může sežrat CPU/RAM celého nodu.
+          # (záměrně vynecháno resources:)
+          # Záměrně bez readinessProbe/livenessProbe.
+      volumes:
+        - name: host-root
+          hostPath:
+            path: /
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vulnapp
+  namespace: insecure-demo
+spec:
+  selector:
+    app: vulnapp
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

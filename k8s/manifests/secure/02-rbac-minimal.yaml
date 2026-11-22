@@ -1,0 +1,37 @@
+# MINIMÁLNÍ RBAC — AC11 + AC12.
+# Dedikovaný ServiceAccount bez automountu tokenu, navázaný na Role s pouze
+# nezbytnými právy. Žádný přístup k secrets přes API (obrana proti postupu z 01-rbac-escalation.sh).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: safeapp-sa
+  namespace: secure-demo
+# AC11: token se do podů tohoto SA automaticky nemountuje.
+automountServiceAccountToken: false
+---
+# Minimální Role: appka si smí přečíst jen vlastní ConfigMap. ŽÁDNÝ přístup k secrets,
+# žádné vytváření podů, nic napříč namespaces.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: safeapp-minimal
+  namespace: secure-demo
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+  # Záměrně NEOBSAHUJE: secrets, pods/create, cokoli napříč namespaces.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: safeapp-minimal
+  namespace: secure-demo
+subjects:
+  - kind: ServiceAccount
+    name: safeapp-sa
+    namespace: secure-demo
+roleRef:
+  kind: Role
+  name: safeapp-minimal
+  apiGroup: rbac.authorization.k8s.io
