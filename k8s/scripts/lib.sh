@@ -90,6 +90,12 @@ wait_pod() {
   fi
 }
 
+# Zjistí síťové rozhraní, které drží danou IPv4 adresu (pro --flannel-iface).
+# Prázdný výstup = nenalezeno (IP ještě není na stroji nebo překlep v env.sh).
+iface_for_ip() {
+  ip -o -4 addr show 2>/dev/null | awk -v ip="$1" '$4 ~ "^"ip"/" {print $2; exit}'
+}
+
 # Výstupní adresář pro případné reporty (Trivy apod.), stejně jako v projektu A.
 OUT_DIR="${_LIB_DIR}/out"
 mkdir -p "$OUT_DIR"

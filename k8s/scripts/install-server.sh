@@ -7,8 +7,31 @@
 #   SECURE_CLUSTER=1 → secure:   SE --secrets-encryption
 # POZOR: šifrování secrets lze zapnout jen při PRVNÍM startu serveru.
 # Přepnutí varianty na už nainstalovaném serveru = nutná čistá reinstalace.
+#
+# Použití:
+#   ./install-server.sh              # instalace (idempotentní)
+#   ./install-server.sh --reinstall  # čistý wipe (uninstall + smazání dat) a instalace znovu
+#   ./install-server.sh --uninstall  # jen odinstalovat k3s server a skončit
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
+
+# --- Úklid / odinstalace serveru -----------------------------------------
+# Spustí oficiální k3s skripty (killall + uninstall) a smaže datastore/config.
+# Přesně tím se řeší „zaseknutý" server z půlrozdělaných pokusů.
+uninstall_server() {
+  warn "Odinstalace k3s serveru: killall + uninstall + smazání /var/lib/rancher a /etc/rancher…"
+  [[ -x /usr/local/bin/k3s-killall.sh ]]   && sudo /usr/local/bin/k3s-killall.sh   >/dev/null 2>&1 || true
+  [[ -x /usr/local/bin/k3s-uninstall.sh ]] && sudo /usr/local/bin/k3s-uninstall.sh >/dev/null 2>&1 || true
+  sudo rm -rf /var/lib/rancher /etc/rancher
+  good "k3s server odinstalován, stav vyčištěn."
+}
+
+case "${1:-install}" in
+  --uninstall|uninstall) uninstall_server; exit 0 ;;
+  --reinstall|--clean|reinstall) uninstall_server ;;
+  ""|install|--install) : ;;
+  *) warn "Neznámý argument '${1}'. Použij: (bez argumentu) | --reinstall | --uninstall" ;;
+esac
 
 say "Instalace k3s serveru na VM1 (${C_BLD}${K3S_SERVER_IP}${C_RST})."
 
@@ -23,8 +46,16 @@ if command -v k3s >/dev/null 2>&1 && systemctl is-active --quiet k3s 2>/dev/null
   echo "    sudo /usr/local/bin/k3s-uninstall.sh"
   echo "  a pak spustit tento skript znovu s jinou hodnotou SECURE_CLUSTER."
 else
+  # --- Síť: vynutit host-only IP z env.sh (jinak k3s vezme NAT 10.0.2.15) --
+  # Bez tohoto by InternalIP nodu byla NAT adresa (u linked clonů u obou stejná)
+  # a pod-to-pod provoz mezi nody by nefungoval. node-ip + flannel-iface to sváží
+  # na rozhraní s host-only adresou z env.sh.
+  SRV_IFACE="$(iface_for_ip "${K3S_SERVER_IP}")"
+  [[ -z "$SRV_IFACE" ]] && warn "Na stroji jsem nenašel rozhraní s IP ${K3S_SERVER_IP} — zkontroluj env.sh / 'ip -4 a'."
+
   # --- Volba varianty podle SECURE_CLUSTER -------------------------------
-  EXTRA_ARGS="--write-kubeconfig-mode=644 --tls-san=${K3S_SERVER_IP} --node-external-ip=${K3S_SERVER_IP}"
+  EXTRA_ARGS="--write-kubeconfig-mode=644 --tls-san=${K3S_SERVER_IP} --node-ip=${K3S_SERVER_IP} --node-external-ip=${K3S_SERVER_IP}"
+  [[ -n "$SRV_IFACE" ]] && EXTRA_ARGS="${EXTRA_ARGS} --flannel-iface=${SRV_IFACE}"
   if [[ "${SECURE_CLUSTER}" == "1" ]]; then
     say "Varianta: ${C_GRN}${C_BLD}SECURE${C_RST} → přidávám ${C_BLD}--secrets-encryption${C_RST}."
     EXTRA_ARGS="${EXTRA_ARGS} --secrets-encryption"
