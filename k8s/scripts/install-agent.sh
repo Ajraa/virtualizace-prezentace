@@ -36,8 +36,12 @@ fi
 # --- Instalace agenta s Docker runtime -----------------------------------
 say "Stahuji a připojuji agenta (get.k3s.io) k ${C_BLD}${K3S_URL}${C_RST} s ${C_BLD}--docker${C_RST}…"
 echo "${C_BLD}\$ curl -sfL https://get.k3s.io | K3S_URL=${K3S_URL} K3S_TOKEN=*** sh -s - agent --docker --node-external-ip=${DOCKER_NODE_IP}${C_RST}"
+# DŮLEŽITÉ: K3S_TOKEN_FILE/K3S_SERVER_IP z env.sh NESMÍ vidět instalátor agenta —
+# K3S_TOKEN_FILE míří na serverovou cestu, kterou by agent marně čekal (Waiting for
+# node-token). Prostředí vyčistíme a předáme jen K3S_URL + K3S_TOKEN.
 curl -sfL https://get.k3s.io \
-  | K3S_URL="${K3S_URL}" K3S_TOKEN="${TOKEN}" sh -s - agent --docker --node-external-ip="${DOCKER_NODE_IP}"
+  | env -u K3S_TOKEN_FILE -u K3S_SERVER_IP K3S_URL="${K3S_URL}" K3S_TOKEN="${TOKEN}" \
+      sh -s - agent --docker --node-external-ip="${DOCKER_NODE_IP}"
 
 say "Čekám, až se agent zaregistruje…"
 for _ in $(seq 1 30); do
