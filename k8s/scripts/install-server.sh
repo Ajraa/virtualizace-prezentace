@@ -34,7 +34,10 @@ else
 
   say "Stahuji a instaluji k3s server (get.k3s.io)…"
   echo "${C_BLD}\$ curl -sfL https://get.k3s.io | sh -s - server ${EXTRA_ARGS}${C_RST}"
-  curl -sfL https://get.k3s.io | sh -s - server ${EXTRA_ARGS}
+  # DŮLEŽITÉ: K3S_URL/K3S_TOKEN z env.sh (potřebuje je jen agent) NESMÍ vidět
+  # instalátor serveru — K3S_URL by node nakonfiguroval jako JOINING agenta a
+  # server by pak visel na "Waiting for node-token". Pro server je proto odebereme.
+  curl -sfL https://get.k3s.io | env -u K3S_URL -u K3S_TOKEN sh -s - server ${EXTRA_ARGS}
 
   say "Čekám, až bude k3s server připraven…"
   for _ in $(seq 1 30); do

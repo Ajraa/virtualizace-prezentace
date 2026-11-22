@@ -11,8 +11,8 @@ set -euo pipefail
 # připojený jako k3s agent s Docker runtime (--docker).
 #
 #  >>> UPRAV MĚ <<<  skutečné IP tvých VM:
-export K3S_SERVER_IP="${K3S_SERVER_IP:-192.168.56.10}"   # VM1
-export DOCKER_NODE_IP="${DOCKER_NODE_IP:-192.168.56.11}"  # VM2 (Docker host z A)
+export K3S_SERVER_IP="${K3S_SERVER_IP:-192.168.56.107}"   # VM1
+export DOCKER_NODE_IP="${DOCKER_NODE_IP:-192.168.56.103}"  # VM2 (Docker host z A)
 
 # API server k3s poslouchá na portu 6443.
 export K3S_URL="${K3S_URL:-https://${K3S_SERVER_IP}:6443}"
@@ -39,7 +39,7 @@ export K3S_TOKEN_FILE="${K3S_TOKEN_FILE:-/var/lib/rancher/k3s/server/node-token}
 # PRVNÍM startu serveru (viz research.md). Přepnutí = čistá reinstalace k3s.
 #   SECURE_CLUSTER=0 → insecure varianta (bez šifrování secrets)
 #   SECURE_CLUSTER=1 → secure varianta  (se --secrets-encryption)
-export SECURE_CLUSTER="${SECURE_CLUSTER:-0}"
+export SECURE_CLUSTER="${SECURE_CLUSTER:-1}"
 
 # --- Namespaces ----------------------------------------------------------
 export NS_INSECURE="${NS_INSECURE:-insecure-demo}"
