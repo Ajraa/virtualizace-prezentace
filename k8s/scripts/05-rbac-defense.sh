@@ -27,11 +27,11 @@ pause
 echo
 say "2) Ověření právy SA přes 'kubectl auth can-i' (dřívější postupy z 01 teď padnou):"
 expect_fail "SA safeapp-sa NESMÍ číst secrets" -- \
-  kubectl auth can-i get secrets --as="$SA" -n "$NS_SECURE" -q
+  kubectl auth can-i get secrets --as="$SA" -n "$NS_SECURE"
 expect_fail "SA safeapp-sa NESMÍ vytvářet pody" -- \
-  kubectl auth can-i create pods --as="$SA" -n "$NS_SECURE" -q
+  kubectl auth can-i create pods --as="$SA" -n "$NS_SECURE"
 expect_fail "SA safeapp-sa NESMÍ nic v kube-system" -- \
-  kubectl auth can-i get secrets --as="$SA" -n kube-system -q
+  kubectl auth can-i get secrets --as="$SA" -n kube-system
 echo
 say "   Co SA naopak SMÍ (minimální nutné právo — čtení ConfigMap):"
 run kubectl auth can-i get configmaps --as="$SA" -n "$NS_SECURE"

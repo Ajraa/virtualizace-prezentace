@@ -66,12 +66,16 @@ expect_fail() {
   local popis="$1"; shift
   [[ "${1:-}" == "--" ]] && shift
   echo "${C_BLD}\$ $*${C_RST}"
-  if "$@" >/dev/null 2>&1; then
-    bad "PROŠLO (chyba obrany): ${popis}"
-    return 1
-  else
+  local out rc
+  out="$("$@" 2>&1)" && rc=0 || rc=$?
+  # Vypíšeme skutečnou hlášku příkazu (odmítnutí/timeout), ať je vidět, že to NEprojde.
+  [[ -n "$out" ]] && printf '%s\n' "$out" | sed 's/^/     ↳ /'
+  if [[ "$rc" -ne 0 ]]; then
     good "BLOKOVÁNO: ${popis}"
     return 0
+  else
+    bad "PROŠLO (chyba obrany): ${popis}"
+    return 1
   fi
 }
 

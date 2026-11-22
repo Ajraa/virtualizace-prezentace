@@ -73,8 +73,8 @@ echo
 say "2) RE-RUN demonstrací se zabezpečenou variantou (vše musí být BLOKOVÁNO):"
 echo
 say "   [AC5/AC11 RBAC] token/práva SA:"
-expect_fail "SA safeapp-sa číst secrets" -- kubectl auth can-i get secrets --as="$SA" -n "$NS_SECURE" -q
-expect_fail "SA safeapp-sa vytvořit pod"  -- kubectl auth can-i create pods  --as="$SA" -n "$NS_SECURE" -q
+expect_fail "SA safeapp-sa číst secrets" -- kubectl auth can-i get secrets --as="$SA" -n "$NS_SECURE"
+expect_fail "SA safeapp-sa vytvořit pod"  -- kubectl auth can-i create pods  --as="$SA" -n "$NS_SECURE"
 echo
 say "   [AC6/AC12 Secrets] secret není v ENV safeappu:"
 POD="$(kubectl -n "$NS_SECURE" get pod -l app=safeapp -o jsonpath='{.items[0].metadata.name}')"
