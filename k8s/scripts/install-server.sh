@@ -46,15 +46,15 @@ if command -v k3s >/dev/null 2>&1 && systemctl is-active --quiet k3s 2>/dev/null
   echo "    sudo /usr/local/bin/k3s-uninstall.sh"
   echo "  a pak spustit tento skript znovu s jinou hodnotou SECURE_CLUSTER."
 else
-  # --- Síť: vynutit host-only IP z env.sh (jinak k3s vezme NAT 10.0.2.15) --
-  # Bez tohoto by InternalIP nodu byla NAT adresa (u linked clonů u obou stejná)
-  # a pod-to-pod provoz mezi nody by nefungoval. node-ip + flannel-iface to sváží
-  # na rozhraní s host-only adresou z env.sh.
+  # --- Síť: flannel na host-only rozhraní (VXLAN mezi nody po 192.168.56.x) -
+  # POZN.: NEpoužíváme --node-ip (s ním k3s server padá na "context deadline
+  # exceeded"). Stačí --flannel-iface: VXLAN tunel pak jede po host-only síti,
+  # takže pod-to-pod mezi nody funguje, i když InternalIP zůstane NAT 10.0.2.15.
   SRV_IFACE="$(iface_for_ip "${K3S_SERVER_IP}")"
   [[ -z "$SRV_IFACE" ]] && warn "Na stroji jsem nenašel rozhraní s IP ${K3S_SERVER_IP} — zkontroluj env.sh / 'ip -4 a'."
 
   # --- Volba varianty podle SECURE_CLUSTER -------------------------------
-  EXTRA_ARGS="--write-kubeconfig-mode=644 --tls-san=${K3S_SERVER_IP} --node-ip=${K3S_SERVER_IP} --node-external-ip=${K3S_SERVER_IP}"
+  EXTRA_ARGS="--write-kubeconfig-mode=644 --tls-san=${K3S_SERVER_IP} --node-external-ip=${K3S_SERVER_IP}"
   [[ -n "$SRV_IFACE" ]] && EXTRA_ARGS="${EXTRA_ARGS} --flannel-iface=${SRV_IFACE}"
   if [[ "${SECURE_CLUSTER}" == "1" ]]; then
     say "Varianta: ${C_GRN}${C_BLD}SECURE${C_RST} → přidávám ${C_BLD}--secrets-encryption${C_RST}."

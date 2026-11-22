@@ -55,12 +55,12 @@ if [[ "$TOKEN" == ZMEN_ME* || -z "$TOKEN" ]]; then
   exit 1
 fi
 
-# --- Síť: vynutit host-only IP z env.sh (jinak InternalIP = NAT 10.0.2.15) -
-# Bez node-ip by nod měl stejnou NAT InternalIP jako server (linked clony) a
-# pod-to-pod mezi nody by nefungoval. Rozhraní odvodíme z DOCKER_NODE_IP.
+# --- Síť: flannel na host-only rozhraní (VXLAN mezi nody po 192.168.56.x) --
+# POZN.: stejně jako u serveru NEpoužíváme --node-ip (způsoboval pád bootstrapu).
+# --flannel-iface stačí: pod-to-pod mezi nody pak jede po host-only síti.
 AGENT_IFACE="$(iface_for_ip "${DOCKER_NODE_IP}")"
 [[ -z "$AGENT_IFACE" ]] && warn "Nenašel jsem rozhraní s IP ${DOCKER_NODE_IP} — zkontroluj env.sh / 'ip -4 a'."
-NET_ARGS="--node-ip=${DOCKER_NODE_IP} --node-external-ip=${DOCKER_NODE_IP}"
+NET_ARGS="--node-external-ip=${DOCKER_NODE_IP}"
 [[ -n "$AGENT_IFACE" ]] && NET_ARGS="${NET_ARGS} --flannel-iface=${AGENT_IFACE}"
 
 # --- Instalace agenta s Docker runtime -----------------------------------

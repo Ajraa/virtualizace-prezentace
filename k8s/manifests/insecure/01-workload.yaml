@@ -36,12 +36,14 @@ spec:
           # AC4 + AC15: nepinovaný :latest → nekontrolovatelná verze, žádná ochrana proti podvržení.
           image: alpine:latest
           # Jednoduchý busybox httpd, aby Service něco obsluhovala (demo laterálního pohybu).
+          # Pozn.: Alpine busybox nemá applet 'httpd' (je v busybox-extras),
+          # proto jednoduchý HTTP responder přes 'nc' — funguje na čistém busyboxu.
           command: ["sh", "-c"]
           args:
             - |
-              mkdir -p /www
-              echo "vulnapp (insecure demo)" > /www/index.html
-              exec httpd -f -p 8080 -h /www
+              while true; do
+                printf 'HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nvulnapp (insecure demo)\n' | nc -l -p 8080 || sleep 1
+              done
           ports:
             - containerPort: 8080
           # AC6: secret předaný jako ENV proměnné (uniká v describe/env/logu potomků).

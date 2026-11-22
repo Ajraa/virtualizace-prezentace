@@ -53,12 +53,14 @@ spec:
           #   nebo:  skopeo inspect docker://alpine:3.19 | jq -r .Digest
           #   nebo:  crane digest alpine:3.19
           image: alpine@sha256:PLACEHOLDER_DOPLN_REALNY_DIGEST_ALPINE_3_19
+          # Pozn.: Alpine busybox nemá applet 'httpd' (je v busybox-extras),
+          # proto HTTP responder přes 'nc' — funguje i s read-only FS a non-root.
           command: ["sh", "-c"]
           args:
             - |
-              mkdir -p /tmp/www
-              echo "safeapp (secure demo)" > /tmp/www/index.html
-              exec httpd -f -p 8080 -h /tmp/www
+              while true; do
+                printf 'HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nsafeapp (secure demo)\n' | nc -l -p 8080 || sleep 1
+              done
           ports:
             - containerPort: 8080
           # AC14: kontejner-level restricted securityContext.
