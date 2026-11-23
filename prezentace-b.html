@@ -201,29 +201,74 @@ curl -sfL https://get.k3s.io | \
   <section class="slide">
     <h2>RBAC &amp; ServiceAccount <span class="badge">skript 01/05</span></h2>
     <div class="scen">Scénář: <span class="pill r">NEBEZPEČNÉ</span> cluster-admin + automount → <span class="pill g">HARDENED</span> minimální Role</div>
+
     <div class="cols">
       <div class="card bad">
         <h3>NEBEZPEČNÉ — SA = cluster-admin</h3>
-        <p>SA <code class="inline">app-sa</code> navázaný přes ClusterRoleBinding na <code class="inline">cluster-admin</code>, token <b>automountnutý</b> do podu.</p>
-        <pre><span class="c"># z podu, přes automount token:</span>
-TOKEN=$(cat /var/run/secrets/kubernetes.io/\
-serviceaccount/token)
+        <pre><span class="c"># insecure/02-rbac-overprivileged.yaml</span>
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: <span class="o">app-sa</span>
+  namespace: insecure-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: <span class="k">ClusterRoleBinding</span>      <span class="c"># platí v CELÉM clusteru</span>
+metadata:
+  name: app-sa-cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: <span class="o">app-sa</span>
+    namespace: insecure-demo
+roleRef:
+  kind: ClusterRole
+  name: <span class="o">cluster-admin</span>         <span class="c"># ← VŠECHNA práva</span>
+  apiGroup: rbac.authorization.k8s.io
+<span class="c"># 01-workload.yaml → spec.serviceAccountName: app-sa</span>
+<span class="c"># automount nenastaveno → default true → token JE v podu</span></pre>
+        <pre><span class="c"># útok: pod se tím tokenem prokáže API serveru</span>
+TOKEN=$(cat /var/run/secrets/.../token)
 curl -sk -H "Authorization: Bearer $TOKEN" \
  https://kubernetes.default/api/v1/secrets
 <span class="o"># → secrets napříč namespaces + lze vytvořit pod</span></pre>
       </div>
       <div class="card good">
         <h3>HARDENED — least privilege</h3>
-        <pre>automountServiceAccountToken: <span class="g">false</span>
-<span class="c"># minimální Role, žádný přístup k secrets</span></pre>
-        <p style="margin-top:8px">Dedikovaný SA <code class="inline">safeapp-sa</code>, token se do podu nevkládá, Role dává jen nezbytné.</p>
-        <pre><span class="c"># ověření zákazu:</span>
-kubectl auth can-i get secrets \
+        <pre><span class="c"># secure/02-rbac-minimal.yaml</span>
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: <span class="g">safeapp-sa</span>
+  namespace: secure-demo
+automountServiceAccountToken: <span class="g">false</span>   <span class="c"># token NENÍ v podu</span>
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: <span class="k">Role</span>                       <span class="c"># platí JEN v namespace</span>
+metadata:
+  name: <span class="g">safeapp-minimal</span>
+  namespace: secure-demo
+rules:
+  - apiGroups: [""]
+    resources: [<span class="g">"configmaps"</span>]      <span class="c"># žádné secrets!</span>
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: <span class="k">RoleBinding</span>                <span class="c"># LEPIDLO: SA ↔ Role</span>
+metadata:
+  name: safeapp-minimal
+subjects:
+  - kind: ServiceAccount
+    name: <span class="g">safeapp-sa</span>            <span class="c"># ← odkaz na SA výše</span>
+roleRef:
+  kind: Role
+  name: <span class="g">safeapp-minimal</span>         <span class="c"># ← odkaz na Role výše</span>
+  apiGroup: rbac.authorization.k8s.io</pre>
+        <pre><span class="c"># reálný pokus jménem SA (skript 05) → tvrdý zákaz:</span>
+kubectl get secrets \
  --as=system:serviceaccount:secure-demo:safeapp-sa
-<span class="g"># → no   (BLOKOVÁNO)</span></pre>
+<span class="o">Error (Forbidden): cannot list resource "secrets"</span></pre>
       </div>
     </div>
-    <p class="hint">Princip: pod dostane jen tolik práv, kolik appka opravdu potřebuje — RCE v podu pak nedá útočníkovi klíče od clusteru.</p>
   </section>
 
   <!-- 7 · Secrets -->
