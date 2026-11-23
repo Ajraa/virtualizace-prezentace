@@ -54,14 +54,19 @@ pause
 
 echo
 say "3) V ENV kontejneru už žádné heslo NENÍ (na rozdíl od insecure varianty):"
-if kubectl -n "$NS_SECURE" exec "$POD" -- sh -c 'env | grep -E "DB_PASSWORD|API_KEY"'; then
-  bad "Neočekávané: heslo je v ENV."
-else
-  good "env neobsahuje DB_PASSWORD ani API_KEY → žádný únik přes prostředí/logy."
-fi
+say "   (env | grep hesla nic nevrátí → nenulový exit = únik zablokován)"
+expect_fail "únik hesla přes ENV kontejneru" -- \
+  kubectl -n "$NS_SECURE" exec "$POD" -- sh -c 'env | grep -E "DB_PASSWORD|API_KEY"'
 echo
 say "   A describe pod nevypisuje hodnotu secretu (jen odkaz na volume):"
 run kubectl -n "$NS_SECURE" describe pod "$POD" | grep -iA2 "secrets" | head -n 6 || true
+pause
+
+echo
+say "3b) I kdyby se útočník dostal do podu, čtení Secretu přes API RBAC zastaví (jako v 05):"
+SA="system:serviceaccount:${NS_SECURE}:safeapp-sa"
+expect_fail "čtení secretu safeapp-secrets jménem safeapp-sa" -- \
+  kubectl -n "$NS_SECURE" get secret safeapp-secrets --as="$SA" -o yaml
 pause
 
 echo

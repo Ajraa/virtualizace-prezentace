@@ -278,19 +278,52 @@ kubectl get secrets \
     <div class="cols">
       <div class="card bad">
         <h3>NEBEZPEČNÉ — ENV + plaintext</h3>
-        <p>Secret předaný jako <b>ENV proměnná</b> a datastore <b>bez šifrování</b> (k3s bez <code class="inline">--secrets-encryption</code>).</p>
-        <pre>kubectl describe pod vulnapp   <span class="c"># vidí ENV</span>
-kubectl exec vulnapp -- env    <span class="o"># DB_PASSWORD=...</span>
-<span class="c"># bez šifrování čitelné přímo z datastore</span></pre>
+        <pre><span class="c"># insecure/03-secret-plaintext.yaml</span>
+apiVersion: v1
+kind: Secret
+metadata:
+  name: <span class="o">app-secrets</span>
+  namespace: insecure-demo
+type: Opaque
+stringData:                     <span class="c"># v datastore jen base64, NE šifra</span>
+  DB_PASSWORD: "S3cr3t-DB-Heslo-FAKE"
+<span class="c"># 01-workload.yaml → secret jako ENV:</span>
+envFrom:
+  - secretRef: {name: <span class="o">app-secrets</span>}</pre>
+        <pre><span class="c"># 3 reálné úniky téhož hesla (skript 02):</span>
+$ kubectl exec vulnapp -- env | grep DB_
+<span class="o">DB_PASSWORD=S3cr3t-DB-Heslo-FAKE</span>   <span class="c"># 1) ENV</span>
+$ kubectl get secret app-secrets \
+   -o jsonpath='{.data.DB_PASSWORD}' | base64 -d
+<span class="o">S3cr3t-DB-Heslo-FAKE</span>             <span class="c"># 2) base64</span>
+$ strings .../db/state.db | grep S3cr3t
+<span class="o">S3cr3t-DB-Heslo-FAKE</span>             <span class="c"># 3) datastore</span></pre>
       </div>
       <div class="card good">
         <h3>HARDENED — soubor + encryption</h3>
-        <pre><span class="c"># mount jako read-only soubor, ne ENV</span>
-volumeMounts: <span class="g">/run/secrets</span> (readOnly)</pre>
-        <p style="margin-top:8px">App čte secret ze souboru → není v <code class="inline">env</code> ani <code class="inline">describe</code>; RBAC čtení secrets přes API zakazuje.</p>
-        <pre><span class="c"># datastore šifrovaný (klíč z 1. startu):</span>
-k3s secrets-encrypt status
-<span class="g"># Encryption Status: Enabled</span></pre>
+        <pre><span class="c"># secure/03-secret-file.yaml (stejná data)</span>
+apiVersion: v1
+kind: Secret
+metadata:
+  name: <span class="g">safeapp-secrets</span>
+  namespace: secure-demo
+type: Opaque
+stringData: {DB_PASSWORD: "S3cr3t-DB-Heslo-FAKE"}
+<span class="c"># secure/01-workload.yaml → mount jako SOUBOR, ne ENV:</span>
+volumeMounts:
+  - {name: secrets, mountPath: <span class="g">/run/secrets</span>, readOnly: true}
+volumes:
+  - name: secrets
+    secret: {secretName: <span class="g">safeapp-secrets</span>, defaultMode: 0440}</pre>
+        <pre><span class="c"># reálné výsledky (skript 06):</span>
+$ kubectl exec safeapp -- cat /run/secrets/DB_PASSWORD
+<span class="g">S3cr3t-DB-Heslo-FAKE</span>   <span class="c"># jen jako soubor</span>
+$ kubectl exec safeapp -- env | grep DB_PASSWORD
+<span class="g">(nic — v ENV není)</span>
+$ kubectl get secret safeapp-secrets --as=...:safeapp-sa
+<span class="o">Error (Forbidden): cannot get resource "secrets"</span>
+$ k3s secrets-encrypt status
+<span class="g">Encryption Status: Enabled</span>   <span class="c"># datastore šifrovaný</span></pre>
       </div>
     </div>
     <div class="warnbox"><code class="inline">--secrets-encryption</code> musí být nastaveno při <b>prvním</b> startu serveru — vygeneruje AES-CBC klíč do <code class="inline">encryption-config.json</code>. Zapnout dodatečně nejde.</div>
