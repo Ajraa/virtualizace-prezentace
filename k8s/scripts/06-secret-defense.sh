@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # 06 — AC12: obrana proti 02-secret-exposure.sh. Secret jen jako read-only SOUBOR
 # v /run/secrets (ne ENV), a k3s se --secrets-encryption → v datastore šifrovaný.
+# NAVÍC: secret se NEvytváří z manifestu se stringData (anti-pattern — plaintext
+# v Gitu), ale IMPERATIVNĚ přes API server → hodnota jde rovnou do datastore.
+# V produkci by zdrojem hodnoty byl trezor (Vault / CI secret); tady default FAKE,
+# nebo gitignorovaný secrets.env. (secure/03-secret-file.yaml tím pádem 06 už nepoužívá.)
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 source "$(dirname "$0")/env.sh" 2>/dev/null || true
@@ -34,13 +38,41 @@ apply_safeapp() {
   fi
 }
 
+# Hodnoty secretu — v produkci z trezoru (Vault/CI), NE z manifestu v Gitu.
+# Default FAKE; lze přebít proměnnými prostředí nebo gitignorovaným secrets.env.
+SECRET_DB_PASSWORD="${SECRET_DB_PASSWORD:-S3cr3t-DB-Heslo-FAKE}"
+SECRET_API_KEY="${SECRET_API_KEY:-sk_live_FAKE_0123456789abcdef}"
+
+# Vytvoří Secret IMPERATIVNĚ (rovnou do datastore přes API server), idempotentně.
+# Žádný stringData manifest v Gitu — právě to je oprava oproti insecure variantě.
+# '--dry-run=client -o yaml | apply' = vytvoř-nebo-zaktualizuj bez chyby při opakování.
+create_secret_in_datastore() {
+  local dir; dir="$(dirname "$0")"
+  if [[ -f "$dir/secrets.env" ]]; then
+    say "Zdroj hodnot: gitignorovaný ${C_BLD}$dir/secrets.env${C_RST} (--from-env-file)"
+    kubectl create secret generic safeapp-secrets -n "$NS_SECURE" \
+      --from-env-file="$dir/secrets.env" \
+      --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  else
+    say "Zdroj hodnot: proměnné prostředí (default ${C_BLD}FAKE${C_RST}). V produkci z trezoru (Vault/CI)."
+    kubectl create secret generic safeapp-secrets -n "$NS_SECURE" \
+      --from-literal=DB_PASSWORD="$SECRET_DB_PASSWORD" \
+      --from-literal=API_KEY="$SECRET_API_KEY" \
+      --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  fi
+  good "safeapp-secrets vytvořen přímo v datastore (ne z manifestu se stringData)."
+}
+
 good "Obrana (AC12): secret jako soubor + šifrování v datastore."
 say "Nasadíme secret a safeapp, který ho mountuje jako read-only soubor."
 pause
 
 echo
-say "1) Nasazení secure secret + RBAC + workload:"
-kube_apply "$MANIFESTS/secure/03-secret-file.yaml"
+say "1) Nasazení: secret IMPERATIVNĚ do datastore (ne z manifestu) + RBAC + workload:"
+kubectl get ns "$NS_SECURE" >/dev/null 2>&1 || kubectl create ns "$NS_SECURE" >/dev/null
+create_secret_in_datastore
+say "   Důkaz, že hodnota je teď v datastore (objekt existuje; hodnota se nevypisuje):"
+run kubectl -n "$NS_SECURE" get secret safeapp-secrets
 kube_apply "$MANIFESTS/secure/02-rbac-minimal.yaml"
 apply_safeapp
 wait_pod "$NS_SECURE" app=safeapp || true

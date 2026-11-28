@@ -226,11 +226,6 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 <span class="c"># 01-workload.yaml → spec.serviceAccountName: app-sa</span>
 <span class="c"># automount nenastaveno → default true → token JE v podu</span></pre>
-        <pre><span class="c"># útok: pod se tím tokenem prokáže API serveru</span>
-TOKEN=$(cat /var/run/secrets/.../token)
-curl -sk -H "Authorization: Bearer $TOKEN" \
- https://kubernetes.default/api/v1/secrets
-<span class="o"># → secrets napříč namespaces + lze vytvořit pod</span></pre>
       </div>
       <div class="card good">
         <h3>HARDENED — least privilege</h3>
@@ -263,10 +258,6 @@ roleRef:
   kind: Role
   name: <span class="g">safeapp-minimal</span>         <span class="c"># ← odkaz na Role výše</span>
   apiGroup: rbac.authorization.k8s.io</pre>
-        <pre><span class="c"># reálný pokus jménem SA (skript 05) → tvrdý zákaz:</span>
-kubectl get secrets \
- --as=system:serviceaccount:secure-demo:safeapp-sa
-<span class="o">Error (Forbidden): cannot list resource "secrets"</span></pre>
       </div>
     </div>
   </section>
@@ -290,42 +281,47 @@ stringData:                     <span class="c"># v datastore jen base64, NE ši
 <span class="c"># 01-workload.yaml → secret jako ENV:</span>
 envFrom:
   - secretRef: {name: <span class="o">app-secrets</span>}</pre>
-        <pre><span class="c"># 3 reálné úniky téhož hesla (skript 02):</span>
-$ kubectl exec vulnapp -- env | grep DB_
-<span class="o">DB_PASSWORD=S3cr3t-DB-Heslo-FAKE</span>   <span class="c"># 1) ENV</span>
-$ kubectl get secret app-secrets \
-   -o jsonpath='{.data.DB_PASSWORD}' | base64 -d
-<span class="o">S3cr3t-DB-Heslo-FAKE</span>             <span class="c"># 2) base64</span>
-$ strings .../db/state.db | grep S3cr3t
-<span class="o">S3cr3t-DB-Heslo-FAKE</span>             <span class="c"># 3) datastore</span></pre>
       </div>
       <div class="card good">
-        <h3>HARDENED — soubor + encryption</h3>
-        <pre><span class="c"># secure/03-secret-file.yaml (stejná data)</span>
-apiVersion: v1
-kind: Secret
-metadata:
-  name: <span class="g">safeapp-secrets</span>
-  namespace: secure-demo
-type: Opaque
-stringData: {DB_PASSWORD: "S3cr3t-DB-Heslo-FAKE"}
+        <h3>HARDENED — soubor + do datastore + encryption</h3>
+        <pre><span class="c"># secret NE z manifestu se stringData (plaintext v Gitu),</span>
+<span class="c"># ale imperativně → rovnou do datastore přes API server:</span>
+kubectl create secret generic <span class="g">safeapp-secrets</span> \
+  -n secure-demo \
+  --from-env-file=<span class="g">secrets.env</span>      <span class="c"># z trezoru/CI, ne z Gitu</span>
+<span class="c"># idempotentně: … --dry-run=client -o yaml | kubectl apply -f -</span>
+<span class="c"># v produkci zdroj = Vault / ExternalSecrets / SealedSecrets</span>
 <span class="c"># secure/01-workload.yaml → mount jako SOUBOR, ne ENV:</span>
 volumeMounts:
   - {name: secrets, mountPath: <span class="g">/run/secrets</span>, readOnly: true}
 volumes:
   - name: secrets
     secret: {secretName: <span class="g">safeapp-secrets</span>, defaultMode: 0440}</pre>
-        <pre><span class="c"># reálné výsledky (skript 06):</span>
-$ kubectl exec safeapp -- cat /run/secrets/DB_PASSWORD
-<span class="g">S3cr3t-DB-Heslo-FAKE</span>   <span class="c"># jen jako soubor</span>
-$ kubectl exec safeapp -- env | grep DB_PASSWORD
-<span class="g">(nic — v ENV není)</span>
-$ kubectl get secret safeapp-secrets --as=...:safeapp-sa
-<span class="o">Error (Forbidden): cannot get resource "secrets"</span>
-$ k3s secrets-encrypt status
-<span class="g">Encryption Status: Enabled</span>   <span class="c"># datastore šifrovaný</span></pre>
       </div>
     </div>
+
+    <div class="cols" style="margin-top:14px">
+      <div class="card bad" style="padding:14px 18px">
+        <h3 style="font-size:17px;margin-bottom:6px">ENV — úniky i BEZ kódu v kontejneru</h3>
+        <ul style="font-size:15px;margin:0;padding-left:22px">
+          <li><code class="inline">docker inspect</code> → <code class="inline">.Config.Env</code> (přes Docker API, bez <code class="inline">exec</code>)</li>
+          <li>dědí <b>child procesy</b> → logy, crash-dumpy, debug endpointy</li>
+          <li><code class="inline">/proc/&lt;pid&gt;/environ</code> + config kontejneru na disku nodu</li>
+          <li>zůstává v prostředí po <b>celý běh</b> procesu</li>
+        </ul>
+      </div>
+      <div class="card good" style="padding:14px 18px">
+        <h3 style="font-size:17px;margin-bottom:6px">Soubor — jen aktivní čtení ve správném kontextu</h3>
+        <ul style="font-size:15px;margin:0;padding-left:22px">
+          <li>NENÍ v <code class="inline">inspect</code> ani v <code class="inline">env</code></li>
+          <li>nedědí child procesy, neleaká do logů</li>
+          <li>čte jen vlastník/<code class="inline">fsGroup</code> (<code class="inline">0440</code>), read-only, tmpfs (RAM)</li>
+          <li>vyžaduje <b>být v kontejneru</b> (RCE) nebo mít host/Docker API</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="warnbox" style="border-left-color:var(--red);background:var(--redbg)"><b>Soubor není všespásný:</b> útočník s shellem jako app-user (RCE) nebo s přístupem k hostiteli / <b>Docker API 2375</b> secret <b>stejně přečte</b> (<code class="inline">cat /run/secrets/…</code>). Mount jen odřízne pasivní a vzdálené cesty a minimální RBAC zmenší kořist (jen vlastní secret, ne celý cluster). Skutečná obrana = <b>krátké TTL / workload identity</b>, zabránit RCE (<b>Pod Security</b>, slide 9) a <b>zavřít Docker API</b> (slide 12).</div>
     <div class="warnbox"><code class="inline">--secrets-encryption</code> musí být nastaveno při <b>prvním</b> startu serveru — vygeneruje AES-CBC klíč do <code class="inline">encryption-config.json</code>. Zapnout dodatečně nejde.</div>
   </section>
 
